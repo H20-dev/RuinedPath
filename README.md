@@ -4,8 +4,11 @@
 ## 操作说明
 - ↑ ↓ 方向键：切换选项
 - 回车键 / 数字键：确认选择
+- F 键：快进文本
 
 ## 运行方式
-主要支持 Windows 系统，其他系统兼容性未知
-直接打开/编译 RuinedPath.exe 即可游玩
-无需安装，无需额外运行库，单文件版
+仅支持 Windows 10+ 系统
+
+Windows 11 + Windows Terminal 以获得最佳体验
+
+直接打开 / 编译 RuinedPath.exe 即可游玩
