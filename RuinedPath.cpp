@@ -29,13 +29,13 @@ bool girlLife = true;// 少女存活
 bool haveBoy = false;// 少年是否入队
 int boyWeapon = 0;   // 少年武器（0=无，1=枪，2=水管）
 
-class Ends {
+class Node {
 public:
 	string name;
 	bool unlocked = false;
 	function<void()> func;
-	Ends() {}
-	Ends(string s2, function<void()> F) : name(s2), func(F) {}
+	Node() {}
+	Node(string s2, function<void()> F) : name(s2), func(F) {}
 	// 序列化（只存需要的数据）
 	void serialize(ofstream& f) const {
 		f.write((const char*)&unlocked, sizeof(unlocked));
@@ -45,10 +45,11 @@ public:
 		f.read((char*)&unlocked, sizeof(unlocked));
 	}
 };
-vector<Ends> badEnd;
-vector<Ends> happyEnd;
-vector<Ends> trueEnd;
-vector<Ends> clue;
+vector<Node> badEnd(40);
+vector<Node> happyEnd(20);
+vector<Node> trueEnd(20);
+vector<Node> clue(30);
+vector<Node> plot(20);
 
 
 // 存档错误类型
@@ -60,31 +61,142 @@ enum class SaveErrorType {
 	VERSION_MISMATCH,
 	INVALID_DATA
 };
+
+enum class PlotIndex {
+	Start = 1,     // 分配物资
+	Explore,       // 初始探索
+	Girl,          // 初遇少女
+	Base,          // 暂入基地
+	Boy,           // 少年同行
+
+	AdminOrder = 11, // 总管密令
+	Lab = 12,        // 试验场所
+	KingTalk = 13,   // 尸王谈判
+	KingEvolve = 14, // 尸王进化
+};
+
+enum class BadEndIndex {
+	Starve = 1,    // 饥馑殒命
+	FailedHack,    // 破密无门
+	Insanity,      // 神智崩摧
+	BaseFallen,    // 独往基覆
+	BaseDestroyed, // 基地沦亡
+	Mutate,        // 变异失智
+	DevKill,       // 作者裁决
+
+	GirlBetrayal,  // 异女噬身
+	Note,          // 阅记遭噬
+	Despair,       // 麻木度世
+	PrematureShot, // 轻敌丧身
+	KingDownfall,  // 称王失意
+	RescueFrenzy,  // 崩解猎援
+	ExitDeath,     // 出界无讯
+	FamiliarTrap,  // 熟迹反灭
+	BugCrash,      // 星光尽灭
+	GirlKilled,    // 杀女被败
+	Swarm,         // 弹尽群噬
+	LoneSurvivor,  // 孤存终亡
+	EliteKill,     // 精英丧噬
+
+	JourneyEnd,       // 途竭而终
+	BoyBetrayal,      // 少叛遭祸
+	FriendsBreak,     // 安离反目
+	CrazyAndDie,      // 成魔叛己
+	StarveWithBoy,    // 携少饥终
+	BoyZombie,        // 异少噬身
+	AdminExecute,     // 首领灭知
+	EmptyCityKing,    // 空城孤王
+	LoopPrison,       // 循环囚笼
+	Annihilation, // 数据湮灭
+};
+enum class HappyEndIndex {
+	Dawn = 1,    // 终睹晨曦
+	Love,        // 仙侣偕行
+	Hero,        // 英名长存
+	Friend,      // 友谊和光
+	Soulmates,   // 心无隔阂
+	Alliance,    // 或敌或友
+	Solidarity,  // 团结破局
+	Peacekeeper, // 真假难辨
+	Balance,     // 域界平衡
+	MemoryEcho,  // 记忆回响
+};
+enum class TrueEndIndex {
+	Normal = 1,   // 如故如常
+	SelfControl,  // 守心自持
+	Experiment,   // 实验之相
+	DomainEnd,    // 域界皆终
+	DelayedDeath, // 迟来之亡
+	Creator,      // 创世新生
+	Assimilation, // 域管同化
+	Illusion,     // 或真或假
+	Instant,      // 时空一瞬
+	Chaos,        // 群星混沌
+};
+enum class ClueIndex {
+	Unused = 0,       // 0号未使用
+	
+	BoyDelayed = 1,   // 1-迟变少年
+	ExperimentEndless,// 2-实验无尽
+	Anomaly,          // 3-域中异象
+	GirlEarly,        // 4-早变异女
+	ExperimentDual,   // 5-实验双体
+	BreakExit,        // 6-破局而退
+	Death,            // 7-死亡迷局
+	Loop,             // 8-复活循环
+	Origin,           // 9-变异溯源
+	Key,              // 10-记忆之键
+	
+	Outside,     // 11-域外之界
+	Survival,    // 12-生存本能
+	Awakening,   // 13-自主觉醒
+	Admin,       // 14-同化终局
+	Resonance,   // 15-双体共鸣
+	Reunion,     // 16-终得团聚
+	Temperament, // 17-性情相容
+	BadLuck,     // 18-投机不巧
+	Creation,    // 19-无尽创世
+	Stability,   // 20-稳态返常
+	
+	Balance,    // 21-域界平衡
+	Symbiosis,  // 22-记忆共生
+	Light,      // 23-轻于鸿毛
+	NewPath,    // 24-新生残途
+	StrangeGun, // 25-诡枪异食
+};
+using PLi = PlotIndex;
+using BEi = BadEndIndex;
+using HEi = HappyEndIndex;
+using TEi = TrueEndIndex;
+using CLi = ClueIndex;
+template<typename T>
+constexpr auto trans(T e) noexcept { // 简化枚举转换单位
+	return static_cast<std::underlying_type_t<T >> (e);
+}
 // 颜色
 namespace color {
 	const string basic = "\033[";
-	
+
 	const string red = basic + "31m";
 	const string green = basic + "92m";
 	const string yellow = basic + "33m";
 	const string blue = basic + "34m";
 	const string purple = basic + "35m";
 	const string sky = basic + "96m";
-	
+
 	const string gray = basic + "90m";
 	const string br_red = basic + "91m";
-	
+
 	const string bg_red = basic + "41m";
 	const string bg_green = basic + "102m";
 	const string bg_yellow = basic + "43m";
 	const string bg_blue = basic + "44m";
 	const string bg_gray = basic + "100m";
-	
+
 	const string rev = basic + "7m";
 	const string bold = basic + "1m";
 	const string reset = basic + "0m";
 }
-using namespace color;
 // ===工具函数===
 inline char getc() {
 	return _getch();
@@ -114,7 +226,7 @@ inline void print(const string& text, bool enter = true) {
 		} else cout << c;
 		if (c != ' ') sleep(30 - speed * 20);
 	}
-	cout << reset;
+	cout << color::reset;
 	if (enter) cout << endl;
 	sleep(60 - speed * 40);
 }
@@ -124,18 +236,18 @@ inline int input(int mi, int ma) {
 	int wrong = 0;
 	ch = getc();
 	while (ch < '0' || ch > '9') {
-		print(red + "输入一个数字");
+		print(color::red + "输入一个数字");
 		wrong++;
 		ch = getc();
 	}
 	int n =  ch - '0';
-	
+
 	while (n < mi || n > ma) {
-		print(red + "输入正确的值");
+		print(color::red + "输入正确的值");
 		wrong++;
 		ch = getc();
 		while (ch < '0' || ch > '9') {
-			print(red + "输入一个数字");
+			print(color::red + "输入一个数字");
 			wrong++;
 			ch = getc();
 		}
@@ -162,13 +274,13 @@ inline void press() {
 inline string numChinese(int num) {
 	if (num < 0) return "";
 	if (num == 0) return "零";
-	
+
 	const string digits[] = {"零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖"};
 	const string units[] = {"仟", "佰", "拾", ""};
 	const int weights[] = {1000, 100, 10, 1};
-	
+
 	string result;
-	
+
 	for (int i = 0; i < 4; i++) {
 		int digit = num / weights[i]; // 取当前高位数字
 		if (digit != 0) {
@@ -191,11 +303,11 @@ inline int option(const string title, const vector<string>& options, bool isPaus
 	while (true) {
 		cls();
 		if (!title.empty()) cout << title << endl;
-		
+
 		cout << "选择：\n";
 		for (int i = 0; i < options.size(); i++) {
 			if (i == selected) {
-				cout << br_red << "> " << options[i] << reset << endl;
+				cout << color::br_red << "> " << options[i] << color::reset << endl;
 			} else {
 				cout << "  " << options[i] << endl;
 			}
@@ -220,8 +332,8 @@ inline int option(const string title, const vector<string>& options, bool isPaus
 			if (key == '2') {
 				key = _getch();
 				if (key == '0') {
-					print(purple + rev + "“翻源代码？太可恨了！” ——The Creator H20");
-					print(sky + "===== THE END - CHEATING =====");
+					print(color::purple + color::rev + "“翻源代码？太可恨了！” ——The Creator H20");
+					print(color::sky + "===== THE END - CHEATING =====");
 					press();
 					exit(0);
 				}
@@ -236,23 +348,23 @@ inline void showStatus() {
 	print("【当前状态】");
 	string bulletBar;
 	if (bullet <= 9)bulletBar += " ";
-	bulletBar += bg_red;
+	bulletBar += color::bg_red;
 	for (int i = 0; i < 15; i++) {
 		if (i < bullet)bulletBar += " ";
-		else if (i == bullet)bulletBar += reset;
+		else if (i == bullet)bulletBar += color::reset;
 	}
-	
+
 	string foodBar;
 	if (food <= 9)foodBar += " ";
-	foodBar += bg_yellow;
+	foodBar += color::bg_yellow;
 	for (int i = 0; i < 15; i++) {
 		if (i < food)foodBar += " ";
-		else if (i == food)foodBar += reset + " ";
+		else if (i == food)foodBar += color::reset + " ";
 	}
-	
-	print(string("子弹：") + "[" + to_string(bullet) + "] " + bulletBar + reset);
-	print(string("食物：") + "[" + to_string(food) + "] " + foodBar + reset);
-	
+
+	print(string("子弹：") + "[" + to_string(bullet) + "] " + bulletBar + color::reset);
+	print(string("食物：") + "[" + to_string(food) + "] " + foodBar + color::reset);
+
 	string icons = "";
 	if (gameClear) icons += "通 "; //通关
 	if (zombieKing) icons += "尸 "; //尸王线
@@ -268,7 +380,7 @@ void resetGameState() {
 	boyWeapon = 0;
 }
 void resetGameLoop() {
-	print(blue + "下一周目：开始。");
+	print(color::blue + "下一周目：开始。");
 	loop ++;
 	gameClear = true;
 	advanced = false;
@@ -279,21 +391,21 @@ void resetGameLoop() {
 }
 
 // 统计结局数组
-int countUnlocked(const vector<Ends>& arr) {
+int countUnlocked(const vector<Node>& arr) {
 	int intg = 0;
-	for (Ends i : arr) {
+	for (Node i : arr) {
 		if (i.unlocked) intg++;
 	}
 	return intg;
 }
 // 结局显示
-void showEnd(vector<Ends> arr, string clr, string title) {
+void showEnd(vector<Node> arr, string clr, string title) {
 	print("\n===== " + title + " =====  (" + to_string(countUnlocked(arr)) + "/" + to_string(arr.size() - 1) + ")");
 	for (int i = 1; i < arr.size(); i++) {
 		if (arr[i].unlocked) {
 			print( clr + "[" + numChinese(i) + "] 已解锁 " + arr[i].name );
 		} else {
-			print( gray + "[" + numChinese(i) + "] 未解锁 " + "？？？？");
+			print( color::gray + "[" + numChinese(i) + "] 未解锁 " + "？？？？");
 		}
 	}
 }
@@ -311,28 +423,28 @@ void showAdv() {
 void showSaveError(SaveErrorType error, const string& operation) {
 	string errorMsg;
 	switch (error) {
-	case SaveErrorType::FILE_OPEN_FAILED:
-		errorMsg = "无法打开存档文件";
-		break;
-	case SaveErrorType::FILE_WRITE_FAILED:
-		errorMsg = "存档写入失败";
-		break;
-	case SaveErrorType::FILE_READ_FAILED:
-		errorMsg = "存档读取失败";
-		break;
-	case SaveErrorType::CHECKSUM_MISMATCH:
-		errorMsg = "存档文件损坏";
-		break;
-	case SaveErrorType::VERSION_MISMATCH:
-		errorMsg = "存档版本不兼容";
-		break;
-	case SaveErrorType::INVALID_DATA:
-		errorMsg = "存档数据无效";
-		break;
-	default:
-		errorMsg = "未知错误";
+		case SaveErrorType::FILE_OPEN_FAILED:
+			errorMsg = "无法打开存档文件";
+			break;
+		case SaveErrorType::FILE_WRITE_FAILED:
+			errorMsg = "存档写入失败";
+			break;
+		case SaveErrorType::FILE_READ_FAILED:
+			errorMsg = "存档读取失败";
+			break;
+		case SaveErrorType::CHECKSUM_MISMATCH:
+			errorMsg = "存档文件损坏";
+			break;
+		case SaveErrorType::VERSION_MISMATCH:
+			errorMsg = "存档版本不兼容";
+			break;
+		case SaveErrorType::INVALID_DATA:
+			errorMsg = "存档数据无效";
+			break;
+		default:
+			errorMsg = "未知错误";
 	}
-	print(red + "[" + operation + "失败]" + errorMsg);
+	print(color::red + "[" + operation + "失败]" + errorMsg);
 }
 
 bool checkSaveExists() {
@@ -342,7 +454,7 @@ bool checkSaveExists() {
 		file.close();                 // 立即关闭文件
 		return exists;
 	} catch (...) {
-		print(yellow + "检查存档时发生错误");
+		print(color::yellow + "检查存档时发生错误");
 		return false;
 	}
 }
@@ -354,10 +466,10 @@ bool saveGame() {
 		showSaveError(SaveErrorType::FILE_OPEN_FAILED, "保存");
 		return false;
 	}
-	
+
 	// 写版本
 	file.write((char*)&VERSION, sizeof(VERSION));
-	
+
 	// 写所有游戏数据
 #define W(x) file.write((char*)&x, sizeof(x))
 	W(gameClear);
@@ -369,13 +481,13 @@ bool saveGame() {
 	W(boyRelat);
 	W(zombieKing);
 #undef W
-	
+
 	// 只写结局解锁状态（安全）
 	for (auto& e : badEnd)  e.serialize(file);
 	for (auto& e : happyEnd)e.serialize(file);
 	for (auto& e : trueEnd) e.serialize(file);
 	for (auto& e : clue)    e.serialize(file);
-	
+
 	// 简单校验
 	uint32_t checksum = 0x3241;
 	file.write((char*)&checksum, 4);
@@ -386,13 +498,13 @@ bool saveGame() {
 // 加载游戏
 bool loadGame() {
 	if (!checkSaveExists()) return false;
-	
+
 	ifstream file(SAVE_FILE, ios::binary);
 	if (!file) {
 		showSaveError(SaveErrorType::FILE_OPEN_FAILED, "加载");
 		return false;
 	}
-	
+
 	// 读版本
 	int ver;
 	file.read((char*)&ver, sizeof(ver));
@@ -401,7 +513,7 @@ bool loadGame() {
 		showSaveError(SaveErrorType::VERSION_MISMATCH, "加载");
 		return false;
 	}
-	
+
 	// 读所有数据
 #define R(x) file.read((char*)&x, sizeof(x))
 	R(gameClear);
@@ -413,13 +525,13 @@ bool loadGame() {
 	R(boyRelat);
 	R(zombieKing);
 #undef R
-	
+
 	// 读解锁状态
 	for (auto& e : badEnd)  e.deserialize(file);
 	for (auto& e : happyEnd)e.deserialize(file);
 	for (auto& e : trueEnd) e.deserialize(file);
 	for (auto& e : clue)    e.deserialize(file);
-	
+
 	// 读校验，不影响
 	uint32_t cs;
 	file.read((char*)&cs, 4);
@@ -450,12 +562,12 @@ bool bulleti(int num) {
 		if (bullet <= 0)return true;
 		print("按任意键开枪...");
 		getc();
-		
+
 		int hitRate = 70; // 基础命中率
 		hitRate += min(20, int(death * 0.4)); // 死亡提升
 		if (zombieKing) hitRate = 100; // 尸王必中
 		if (loop >= 2) hitRate += 10 * loop; // 熟练度提升
-		
+
 		if (random(1, 100) <= hitRate) {
 			print("命中！丧尸倒地");
 		} else {
@@ -472,47 +584,47 @@ void fakeBug(int bugType = random(1, 40 - loop * 3)) {
 	if (loop < 2) return;
 	switch (bugType) {
 		case 1: // 计算器
-		for (int i = 1; i <= 6; i++) system("start calc");
-		break;
-	case 2:
-		print(purple + "===== 内存溢出警告 =====");
-		sleep(600 * loop);
-		cls();
-		break;
+			for (int i = 1; i <= 6; i++) system("start calc");
+			break;
+		case 2:
+			print(color::purple + "===== 内存溢出警告 =====");
+			sleep(600 * loop);
+			cls();
+			break;
 		case 3: // 假的程序崩溃提示
-		print(red + "程序异常 0xC000041D: 主线程退出");
-		sleep(1000 * loop);
-		cls();
-		break;
+			print(color::red + "程序异常 0xC000041D: 主线程退出");
+			sleep(1000 * loop);
+			cls();
+			break;
 		case 4: // 文字重复输出
-		print(red + "你你你你选选选选择择择择错错错错误误误误", false);
-		sleep(600 * loop);
-		cout << reset << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"; // 回退删除乱码
-		break;
+			print(color::red + "你你你你选选选选择择择择错错错错误误误误", false);
+			sleep(600 * loop);
+			cout << color::reset << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"; // 回退删除乱码
+			break;
 		case 6: // 假的存档损坏提示
-		print(yellow + "[警告] 存档文件 CRC 校验失败 (0xC000" + to_string(random(10000, 99999)) + ")");
-		sleep(1200 * loop);
-		cls();
-		break;
+			print(color::yellow + "[警告] 存档文件 CRC 校验失败 (0xC000" + to_string(random(10000, 99999)) + ")");
+			sleep(1200 * loop);
+			cls();
+			break;
 		case 7: // 界面元素错位
-		cout << string(10, '\n');
-		cout << string(25, ' ');
-		print(sky + "<<<<<<<<< 渲染层偏移 >>>>>>>>>");
-		sleep(800 * loop);
-		cls();
-		break;
-		case 8: // 按键无响应假象（仅延迟）
-		print("按任意键继续...", false);
-		sleep(2000 * loop);
-		break;
+			cout << string(10, '\n');
+			cout << string(25, ' ');
+			print(color::sky + "<<<<<<<<< 渲染层偏移 >>>>>>>>>");
+			sleep(800 * loop);
+			cls();
+			break;
+		case 8: // 按键无响应假象
+			print("按任意键继续...", false);
+			sleep(2000 * loop);
+			break;
 		case 9: //cmd
-		for (int i = 1; i <= 10; i++) system("start cmd");
-		break;
-	case 10:
-		for (int i = 1; i <= 25; i++) system("start powershell");
-		break;
-	default:
-		break;
+			for (int i = 1; i <= 10; i++) system("start cmd");
+			break;
+		case 10:
+			for (int i = 1; i <= 25; i++) system("start powershell");
+			break;
+		default:
+			break;
 	}
 }
 void Clue() {
@@ -524,55 +636,54 @@ void Clue() {
 		"19-无尽创世", "20-稳态返常", "21-域界平衡", "22-记忆共生", "23-轻于鸿毛"
 		"24-新生残途", "25-诡枪异食"
 	};
-	for (int i = 0; i < clName.size(); i++) clue.push_back(Ends(clName[i], [i, clName](){
-		print(sky + "【线索·星光】第" + numChinese(i) + "章");
-		print(sky + clName[i]);
+	for (int i = 0; i < clName.size(); i++) clue[i] = Node(clName[i], [i, clName]() {
+		print(color::sky + "【线索·星光】第" + numChinese(i) + "章");
+		print(color::sky + clName[i]);
 		clue[i].unlocked = true;
-	}));
+	});
 }
 // 结局函数
 
 void BadEnd() {
-	badEnd.resize(31);
 	auto BE = [](int n) {
-		print(red + "【终局·憾恨】第" + numChinese(n) + "幕");
-		print(red + badEnd[n].name);
+		print(color::red + "【终局·憾恨】第" + numChinese(n) + "幕");
+		print(color::red + badEnd[n].name);
 		badEnd[n].unlocked = 1;
 		death++;
 	};
-	badEnd[1] = Ends("1-饥馑殒命", [&BE]() {
+	badEnd[1] = Node("1-饥馑殒命", [&BE]() {
 		press();
 		print("粮囊已空，你静坐于破败的角落，身躯因饥饿日渐消瘦。");
 		print("指尖划过干裂的唇，连呼喊的力气也已耗尽，在寂静中咽下了最后一口气。");
 		BE(1);
 		press();
 	});
-	badEnd[2] = Ends("2-破密无门", [&BE]() {
+	badEnd[2] = Node("2-破密无门", [&BE]() {
 		press();
 		print("你皱着眉反复尝试，指尖因焦躁微微颤抖，按钮上的数字冰冷却熟悉。");
 		print("请输入密码：");
 		print("123456");
 		sleep(100);
-		print(red + "密码错误！警报声骤然响起");
+		print(color::red + "密码错误！警报声骤然响起");
 		print("000000");
 		sleep(100);
-		print(red + "密码错误！防御系统启动");
+		print(color::red + "密码错误！防御系统启动");
 		print("666666");
 		sleep(100);
-		print(red + "密码错误！目标已锁定——入侵者");
+		print(color::red + "密码错误！目标已锁定——入侵者");
 		print("");
 		print("一道激光破空而来，你甚至来不及反应，便已倒在血泊之中");
 		BE(2);
 		press();
 	});
-	badEnd[3] = Ends("3-神智崩摧", [&BE]() {
+	badEnd[3] = Node("3-神智崩摧", [&BE]() {
 		press();
 		print("长久的等待与绝望如同潮水，终于漫过了理智的堤坝，你陷入了彻底的癫狂。");
 		BE(3);
-		if (happyEnd[1].unlocked) clue[3].func();
+		if (happyEnd[trans(HEi::Dawn)].unlocked) clue[trans(CLi::Anomaly)].func();
 		press();
 	});
-	badEnd[4] = Ends("4-独往基覆", [&BE]() {
+	badEnd[4] = Node("4-独往基覆", [&BE]() {
 		press();
 		print("当你完成任务归来时，眼前的景象令你如坠冰窟——");
 		print("幸存者基地已被丧尸攻破，残垣断壁间，只余丧尸的嘶吼与冰冷的死寂。");
@@ -580,7 +691,7 @@ void BadEnd() {
 		BE(4);
 		press();
 	});
-	badEnd[5] = Ends("5-基地沦亡", [&BE]() {
+	badEnd[5] = Node("5-基地沦亡", [&BE]() {
 		press();
 		print("丧尸的浪潮如同黑色的洪水，汹涌地冲击着基地的防线。");
 		print("尽管基地的众人皆拼尽全力抵抗，血肉之躯终究难敌滔天尸潮。");
@@ -588,7 +699,7 @@ void BadEnd() {
 		BE(5);
 		press();
 	});
-	badEnd[6] = Ends("6-变异失智", [&BE]() {
+	badEnd[6] = Node("6-变异失智", [&BE]() {
 		press();
 		print("一股异样的燥热从四肢百骸涌起，你能清晰地感觉到，身体正在被病毒吞噬。");
 		print("意识如同风中残烛，渐渐模糊，腹中升腾起对人肉的疯狂渴望。");
@@ -596,15 +707,15 @@ void BadEnd() {
 		BE(6);
 		press();
 	});
-	badEnd[7] = Ends("7-作者裁决", [&BE]() {
+	badEnd[7] = Node("7-作者裁决", [&BE]() {
 		press();
 		print("冥冥之中，一股不可抗拒的力量降临，你尚未察觉，便已魂归黄泉——");
 		print("你被这世界的缔造者，亲手抹杀。");
 		BE(7);
-		clue[18].func();
+		clue[trans(CLi::BadLuck)].func();
 		press();
 	});
-	badEnd[8] = Ends("8-异女噬身", [&BE]() {
+	badEnd[8] = Node("8-异女噬身", [&BE]() {
 		press();
 		print("椅上坐着的，是个十五岁上下的少年，眉眼间带着与年龄不符的冷漠。");
 		print("你正为这突兀的景象惊愕，少年却缓缓站起，望向你身后的少女。");
@@ -614,18 +725,18 @@ void BadEnd() {
 		print("你失去意识前的最后一幕，是少女俯身，咬向你脖颈的模样。");
 		if (gameClear)	print("“这不是应该有的结局……”");
 		BE(8);
-		clue[4].func();
+		clue[trans(CLi::GirlEarly)].func();
 		press();
 	});
-	badEnd[9] = Ends("9-阅记遭噬", [&BE]() {
+	badEnd[9] = Node("9-阅记遭噬", [&BE]() {
 		press();
 		print("正当你沉浸在笔记的内容中时，脖颈处骤然传来剧痛——被人狠狠咬住。");
 		print("临死前，你隐约听到少年的声音，轻得如同叹息：“再来一次吧。”");
 		BE(9);
-		clue[5].func();
+		clue[trans(CLi::ExperimentDual)].func();
 		press();
 	});
-	badEnd[10] = Ends("10-麻木度世", [&BE]() {
+	badEnd[10] = Node("10-麻木度世", [&BE]() {
 		press();
 		print("你在荒野中，寻到了另一处幸存者基地，弹尽粮绝的你，选择加入其中。");
 		print("此后的日子，单调得如同复制粘贴：白日外出搜寻物资，夜晚归巢蜷缩度日。");
@@ -635,14 +746,14 @@ void BadEnd() {
 		BE(10);
 		press();
 	});
-	badEnd[11] = Ends("11-轻敌丧身", [&BE]() {
+	badEnd[11] = Node("11-轻敌丧身", [&BE]() {
 		press();
 		print("你仓促间朝丧尸扣动扳机，却听见枪膛发出一声空响——子弹尚未上膛。");
 		print("丧尸的利爪转瞬即至，你被一口咬断喉咙，倒在了血泊之中。");
 		BE(11);
 		press();
 	});
-	badEnd[12] = Ends("12-称王失意", [&BE]() {
+	badEnd[12] = Node("12-称王失意", [&BE]() {
 		press();
 		print("作为至高无上的王，你看向站在你下面的所有人...");
 		print("歼灭一切有生力量，不留一个人头！");
@@ -652,10 +763,10 @@ void BadEnd() {
 		print("你不幸在睡梦中，被部下杀死……");
 		print("“果然，最可恨的不是反派，而是生存的本能”");
 		BE(12);
-		clue[12].func();
+		clue[trans(CLi::Survival)].func();
 		press();
 	});
-	badEnd[13] = Ends("13-崩解猎援", [&BE]() {
+	badEnd[13] = Node("13-崩解猎援", [&BE]() {
 		press();
 		print("长久的等待与绝望如同潮水，终于漫过了理智的堤坝，你陷入了彻底的癫狂。");
 		if (zombieKing) {
@@ -664,22 +775,22 @@ void BadEnd() {
 			print("你如同狩猎的凶兽，将救援队逐一屠戮，鲜血染红了原本安宁的居所。");
 			print("当最后一人倒下时，你俯身，开始享用这场血腥的“盛宴”。");
 			BE(13);
-			clue[9].func();
+			clue[trans(CLi::Origin)].func();
 			press();
 			return;
 		}
-		if (happyEnd[1].unlocked) clue[3].func();
+		if (happyEnd[trans(HEi::Dawn)].unlocked) clue[trans(CLi::Anomaly)].func();
 		press();
 	});
-	badEnd[14] = Ends("14-出界无讯", [&BE]() {
+	badEnd[14] = Node("14-出界无讯", [&BE]() {
 		press();
 		print("一股强烈的撕扯感骤然袭来，仿佛有无形的手，要将你的灵魂从躯体中剥离。");
 		print("这般剧痛，远非血肉之躯所能承受，你在极致的痛苦中，失去了生命。");
 		BE(14);
-		clue[11].func();
+		clue[trans(CLi::Outside)].func();
 		press();
 	});
-	badEnd[15] = Ends("15-熟迹反灭", [&BE]() {
+	badEnd[15] = Node("15-熟迹反灭", [&BE]() {
 		press();
 		print("你忽然察觉，笔记上的字迹竟带着几分熟悉，仿佛是刚被人写下不久。");
 		print("正当你凝神思索时，脖颈处骤然传来剧痛——被人狠狠咬住。");
@@ -687,7 +798,7 @@ void BadEnd() {
 		BE(15);
 		press();
 	});
-	badEnd[16] = Ends("16-星光尽灭", [&BE]() {
+	badEnd[16] = Node("16-星光尽灭", [&BE]() {
 		press();
 		print("你底 干什么？世如此");
 		print("为到么什这在个界  卡顿？");
@@ -697,12 +808,12 @@ void BadEnd() {
 		BE(16);
 		press();
 	});
-	badEnd[17] = Ends("17-杀女被败", [&BE]() {
+	badEnd[17] = Node("17-杀女被败", [&BE]() {
 		print("你的杀意被她察觉，她先发制人，一颗子弹精准地穿透了你的心脏。");
 		BE(17);
 		press();
 	});
-	badEnd[18] = Ends("18-弹尽群噬", [&BE]() {
+	badEnd[18] = Node("18-弹尽群噬", [&BE]() {
 		press();
 		print("三只丧尸嘶吼着蜂拥而上，你被瞬间扑倒在地，根本来不及挣扎。");
 		print("尖锐的牙齿狠狠刺穿你的喉咙，鲜血如泉涌，意识如潮水般迅速褪去……");
@@ -713,7 +824,7 @@ void BadEnd() {
 		BE(18);
 		press();
 	});
-	badEnd[19] = Ends("19-孤存终亡", [&BE]() {
+	badEnd[19] = Node("19-孤存终亡", [&BE]() {
 		press();
 		print("你携着无尽的食物，独自流浪在末世的荒原之上，却再也未曾遇见任何活物。");
 		print("孤独如同囚笼，禁锢着你的心脏，日复一日，终至窒息。");
@@ -721,7 +832,7 @@ void BadEnd() {
 		BE(19);
 		press();
 	});
-	badEnd[20] = Ends("20-精英丧噬", [&BE]() {
+	badEnd[20] = Node("20-精英丧噬", [&BE]() {
 		press();
 		print("精英丧尸的速度远超你的想象，它灵巧地躲过你的子弹，瞬间便扑至你面前。");
 		print("锋利的爪子撕开了你的胸膛，鲜血染红了脚下的土地，你轰然倒地……");
@@ -732,7 +843,7 @@ void BadEnd() {
 		BE(20);
 		press();
 	});
-	badEnd[21] = Ends("21-途竭而终", [&BE]() {
+	badEnd[21] = Node("21-途竭而终", [&BE]() {
 		press();
 		print("你与少年结伴，踏上了寻找安全区的路途，然末世的危险，远非你们所能预料。");
 		print("一次搜寻物资时，少年不慎触发丧尸陷阱，你为救他，耗尽了所有子弹。");
@@ -740,7 +851,7 @@ void BadEnd() {
 		BE(21);
 		press();
 	});
-	badEnd[22] = Ends("22-少叛遭祸", [&BE]() {
+	badEnd[22] = Node("22-少叛遭祸", [&BE]() {
 		press();
 		print("深夜露营时，少年趁你熟睡，偷走了所有食物与剩余的子弹，消失在夜色中。");
 		print("你醒来时，已是一无所有，饥饿与绝望将你吞噬，最终倒在荒野之中。");
@@ -748,7 +859,7 @@ void BadEnd() {
 		BE(22);
 		press();
 	});
-	badEnd[23] = Ends("23-安离反目", [&BE]() {
+	badEnd[23] = Node("23-安离反目", [&BE]() {
 		press();
 		print("你与少年侥幸逃离商场，然后续的旅程中，食物日渐耗尽。");
 		print("为了最后一份食物，你们反目成仇，少年用你赠予的武器，将你击伤在地。");
@@ -756,7 +867,7 @@ void BadEnd() {
 		BE(23);
 		press();
 	});
-	badEnd[24] = Ends("24-成魔叛己", [&BE]() {
+	badEnd[24] = Node("24-成魔叛己", [&BE]() {
 		press();
 		print("你闭上眼睛，狠下心扣动扳机，少年应声倒地，鲜血染红了他的衣衫。");
 		print("杀死同伴的罪恶感如影随形，最终令你精神崩溃，变得嗜血好杀。");
@@ -764,14 +875,14 @@ void BadEnd() {
 		BE(24);
 		press();
 	});
-	badEnd[25] = Ends("25-携少饥终", [&BE]() {
+	badEnd[25] = Node("25-携少饥终", [&BE]() {
 		press();
 		print("你携着被感染的少年，在末世中艰难前行，然食物很快便消耗殆尽。");
 		print("你们相拥着蜷缩在废弃的车厢里，在饥饿与寒冷中，一同走向了死亡。");
 		BE(25);
 		press();
 	});
-	badEnd[26] = Ends("26-异少噬身", [&BE]() {
+	badEnd[26] = Node("26-异少噬身", [&BE]() {
 		press();
 		print("食物耗尽的刹那，少年彻底变异，理智被病毒吞噬，化作了狰狞的丧尸。");
 		print("他扑向你，锋利的牙齿咬断了你的颈动脉，鲜血溅满了他的脸庞。");
@@ -779,14 +890,14 @@ void BadEnd() {
 		BE(26);
 		press();
 	});
-	badEnd[27] = Ends("27-首领灭知", [&BE]() {
+	badEnd[27] = Node("27-首领灭知", [&BE]() {
 		print("他看向你，目光冷冽，稍加思索后，缓缓开口：");
-		print(red + "你知道的太多了，已无法重置，只能被销毁！");
+		print(color::red + "你知道的太多了，已无法重置，只能被销毁！");
 		print("你的意识最终消散在乱码之中");
 		BE(27);
 		press();
 	});
-	badEnd[28] = Ends("28-空城孤王", [&BE]() {
+	badEnd[28] = Node("28-空城孤王", [&BE]() {
 		press();
 		if (loop >= 2) {
 			print("你站在城市顶端，俯瞰着俯首帖耳的尸群，却连一丝胜利的喜悦都无——记忆告诉你，这空城本就是定制的牢笼。");
@@ -798,12 +909,12 @@ void BadEnd() {
 			print("你开始怀念人类的温度、语言的喧嚣，甚至是末世的挣扎...");
 		}
 		print("");
-		print(purple + "你成了空城的唯一王者，知道一切，却无人可统治，无人可倾诉。");
-		print(purple + "当最后一丝人类意识消散时，你终于明白 —— 尸王的王座，本就是孤独的坟墓。");
+		print(color::purple + "你成了空城的唯一王者，知道一切，却无人可统治，无人可倾诉。");
+		print(color::purple + "当最后一丝人类意识消散时，你终于明白 —— 尸王的王座，本就是孤独的坟墓。");
 		BE(28);
 		press();
 	});
-	badEnd[29] = Ends("29-循环囚笼", [&BE]() {
+	badEnd[29] = Node("29-循环囚笼", [&BE]() {
 		press();
 		if (loop >= 3) {
 			print("你站在实验室中央，手环上的周目数字跳至“叁”，却发现所有出口都已锁死。");
@@ -815,7 +926,7 @@ void BadEnd() {
 		saveGame();
 		exit(0);
 	});
-	badEnd[30] = Ends("30-数据湮灭", [&BE]() {
+	badEnd[30] = Node("30-数据湮灭", [&BE]() {
 		press();
 		if (loop >= 3) {
 			print("你在三周目试图修改实验核心数据，却触发了管理员的“数据湮灭”协议。");
@@ -829,22 +940,21 @@ void BadEnd() {
 	});
 }
 void HappyEnd() {
-	happyEnd.resize(11);
 	auto HE = [](int n) {
-		print(green + "【终局·幸悦】第" + numChinese(n) + "幕");
-		print(green + happyEnd[n].name);
+		print(color::green + "【终局·幸悦】第" + numChinese(n) + "幕");
+		print(color::green + happyEnd[n].name);
 		happyEnd[n].unlocked = true;
 	};
-	happyEnd[1] = Ends("1-终睹晨曦", [&HE]() {
+	happyEnd[1] = Node("1-终睹晨曦", [&HE]() {
 		press();
 		print("某日清晨，久寂的家门忽闻声响，你携着警惕推门，却见天光破开阴霾——");
 		print("政府军已清除城中丧尸，身着制服的士兵正于街巷间呼唤幸存者，曙光终至。");
 		if (advanced) print("“这是骗局吗？”你心中暗想，怎会如此轻易便重归美好。");
 		HE(1);
-		if (badEnd[3].unlocked) clue[3].func();
+		if (badEnd[trans(BEi::Insanity)].unlocked) clue[trans(CLi::Anomaly)].func();
 		press();
 	});
-	happyEnd[2] = Ends("2-仙侣偕行", [&HE]() {
+	happyEnd[2] = Node("2-仙侣偕行", [&HE]() {
 		press();
 		print("朝夕相伴的时光里，你与少女渐生情愫，在末世的废墟之上，相爱相依。");
 		print("你们的日子，虽漂泊却也温馨，仿佛末世的黑暗，也因彼此的存在而褪去几分。");
@@ -852,11 +962,11 @@ void HappyEnd() {
 		vector<string> opts = {"1.独自一人前往", "2.和少女一起去", "3.杀了少女"};
 		int choice = option("基地首领希望你执行一项危险任务，你作何选择？", opts);
 		if (choice == 1) {
-			badEnd[4].func();
+			badEnd[trans(BEi::BaseFallen)].func();
 			return;
 		}
 		if (choice == 3) {
-			badEnd[17].func();
+			badEnd[trans(BEi::GirlKilled)].func();
 			return;
 		}
 		print("当你与少女完成任务归来时，眼前的景象令你心头一沉——");
@@ -865,7 +975,7 @@ void HappyEnd() {
 		print("所幸，这荒芜的末世里，有彼此相伴，便不算孤身一人。");
 		if (loop >= 2) {
 			cls();
-			print(purple + "【少女视角·实验日志】");
+			print(color::purple + "【少女视角·实验日志】");
 			print("我是2号实验体，免疫是假的——只是变异被压制了。");
 			print("每次循环，我都看着他（玩家）死亡、重来，却无法提醒...");
 			print("管理员说，只要我“演好角色”，就能放过少年...");
@@ -877,7 +987,7 @@ void HappyEnd() {
 		HE(2);
 		press();
 	});
-	happyEnd[3] = Ends("3-英名长存", [&HE]() {
+	happyEnd[3] = Node("3-英名长存", [&HE]() {
 		press();
 		print("你在基地中，过着平静的日子，与同伴一同抵御丧尸，守护着这方小小的安身之所。");
 		print("直到某一日，尸潮汹涌而至，如黑色的洪水，冲击着基地的防线。");
@@ -894,17 +1004,17 @@ void HappyEnd() {
 			HE(3);
 			press();
 			return;
-		} else badEnd[5].func();
+		} else badEnd[trans(BEi::BaseDestroyed)].func();
 	});
-	happyEnd[4] = Ends("4-友谊和光", [&HE]() {
+	happyEnd[4] = Node("4-友谊和光", [&HE]() {
 		press();
 		print("与少年相伴的时光里，你们彼此守护，于末世的黑暗中，成为了对方的光。");
 		print("那些细碎的温暖与感动，终让你点亮了自己的内心。");
-		print("于是，你与少年携手，在这末世之中，活成了彼此的归宿，幸福而安稳。");
+		print("于是，你与少年携手，在这末世之中，活成了彼此的挚友，幸福而安稳。");
 		HE(4);
 		press();
 	});
-	happyEnd[5] = Ends("5-心无隔阂", [&HE]() {
+	happyEnd[5] = Node("5-心无隔阂", [&HE]() {
 		press();
 		print("“没关系的，一切都会好起来的。”你轻声安慰，语气温柔。");
 		print("他似是感受到了你的善意，原本紧绷的身躯渐渐放松，一步步向你靠近。");
@@ -912,7 +1022,7 @@ void HappyEnd() {
 		HE(5);
 		press();
 	});
-	happyEnd[6] = Ends("6-或敌或友", [&HE]() {
+	happyEnd[6] = Node("6-或敌或友", [&HE]() {
 		print("你点头应允，少女露出笑容：“我先去基地准备，你用尸群守住基地外围！”");
 		girlRelat += 3;
 		press();
@@ -924,41 +1034,41 @@ void HappyEnd() {
 		print("末世之中，你成了最奇特的守护者 —— 一半是尸，一半是人。");
 		print("“我们，是敌人，还是朋友？”");
 		HE(6);
-		clue[17].func();
+		clue[trans(CLi::Temperament)].func();
 		press();
 	});
-	happyEnd[7] = Ends("7-团结破局", [&HE]() {
+	happyEnd[7] = Node("7-团结破局", [&HE]() {
 		press();
 		print("布满仪器的实验室中，你对着身着白大褂的男子，大声嘶吼，字字泣血：");
 		print("“少年与少女也是鲜活的生命！放他们出去！”");
 		print("男子缓步走向你，语气淡漠：“你会被永远困在循环之中，但可尝试改写他们的命运。”");
 		print("语毕，他按下控制台的按钮，你瞬间失去了意识……");
 		print("你眼前出现一间白色的实验室，门口的密码锁闪烁着光芒，提示语显示：“编号之和”。");
-		
+
 		print("你握着完整的实验日志，脑海中所有碎片骤然拼接——少年是延迟变异的1号，少女是免疫病毒的2号，而你，是核心测试体3号。答案是6");
 		print("请输入密码：");
 		int password = input(0, 999);
 		if (password == 6) {
 			print("密码正确！实验室的门缓缓开启，你找到了突破循环的关键设备。");
 		} else {
-			badEnd[2].func();
+			badEnd[trans(BEi::FailedHack)].func();
 			return;
 		}
 		print("“我们不是敌人，是被同一根线操控的棋子。”少年的声音从身后响起，他手中紧攥着半块实验体标识牌，与你口袋里的碎片纹路相合。");
 		print("少女缓步走来，手臂上的芯片排斥伤口泛着微光：“我能感知到管理员的信号，他们在监控我们的每一步选择，循环的核心就在这间实验室。”");
 		print("三人并肩站在实验室门前，密码锁闪烁着红光，提示语从“编号之和”变为“羁绊之证”——这是管理员从未预料到的变量，也是破局的唯一钥匙。");
 		print("实验室大门缓缓开启，核心控制台映入眼帘，屏幕上跳动着无数实验体的循环数据——不止你们三人，还有无数被囚禁在虚拟末世中的灵魂。");
-		
+
 		print("再次醒来，1号与2号已彻底摆脱了管理员的控制，三人并肩而立，一同走出了实验室。");
 		print("你们在末世的废墟之上，建立了真正的幸存者营地。");
 		print("===== THE END - SOLIDARITY =====");
 		HE(6);
-		clue[13].func();
+		clue[trans(CLi::Awakening)].func();
 		resetGameLoop();
 		press();
 	});
-	
-	happyEnd[8] = Ends("8-真假难辨", [&HE]() {
+
+	happyEnd[8] = Node("8-真假难辨", [&HE]() {
 		press();
 		print("你特意在城市中心建立了一个中立区，接纳所有愿意和平共处的人和丧尸。");
 		print("无论是被人类抛弃的幸存者，还是被尸群驱逐的高阶丧尸，都可以在这里找到容身之所。");
@@ -966,7 +1076,7 @@ void HappyEnd() {
 		print("渐渐地，中立区成了末世中唯一的净土。");
 		print("人们在这里安居乐业，丧尸在这里学习如何与人类相处。");
 		print("而你，则走向远方……");
-		
+
 		print("你走过了一个又一个废墟，见过了太多的生死和离别。");
 		print("你见过人类的善良，也见过人类的丑恶；");
 		print("你见过丧尸的凶残，也见过丧尸的温情。");
@@ -975,10 +1085,10 @@ void HappyEnd() {
 		zombieKing = false;
 		death /= 2;
 		HE(8);
-		clue[20].func();
+		clue[trans(CLi::Stability)].func();
 		press();
 	});
-	happyEnd[9] = Ends("9-域界平衡", [&HE]() {
+	happyEnd[9] = Node("9-域界平衡", [&HE]() {
 		press();
 		if (loop >= 3) {
 			print("你拒绝了“域管同化”，也没有选择“团结破局”，而是与总管理员达成了“域界平衡”协议。");
@@ -990,11 +1100,11 @@ void HappyEnd() {
 		}
 		print("===== THE END - BALANCE =====");
 		HE(9);
-		clue[21].func();
+		clue[trans(CLi::Balance)].func();
 		resetGameLoop();
 		press();
 	});
-	happyEnd[10] = Ends("10-记忆回响", [&HE]() {
+	happyEnd[10] = Node("10-记忆回响", [&HE]() {
 		press();
 		print("你没有同伴，没有基地，没有解药，也没有力量。");
 		print("你只有一身数不清的伤痕，和几十次死亡刻进骨髓的记忆。");
@@ -1006,9 +1116,9 @@ void HappyEnd() {
 		print("你只是安静地坐在废墟里，看着夕阳落在残破的城市。");
 		sleep(800);
 		print("");
-		print(green + "你终于明白——");
-		print(green + "循环不是惩罚，记忆不是枷锁。");
-		print(green + "你走过的每一条路，死去的每一次，都不是白费。");
+		print(color::green + "你终于明白——");
+		print(color::green + "循环不是惩罚，记忆不是枷锁。");
+		print(color::green + "你走过的每一条路，死去的每一次，都不是白费。");
 		sleep(800);
 		print("");
 		print("你接纳了所有的自己。");
@@ -1016,32 +1126,31 @@ void HappyEnd() {
 		print("也接纳了——你还活着这件事。");
 		sleep(800);
 		print("");
-		print(bold + "你不是实验体。");
-		print(bold + "你不是管理员。");
-		print(bold + "你不是尸王。");
-		print(bold + "你只是你。");
+		print(color::bold + "你不是实验体。");
+		print(color::bold + "你不是管理员。");
+		print(color::bold + "你不是尸王。");
+		print(color::bold + "你只是你。");
 		sleep(1200);
 		print("");
-		print(green + "在这片破碎的末世里，你找到了真正的自由。");
-		print(green + "无需逃离，无需战斗，无需依靠。");
-		print(green + "与所有记忆共生，与自己和解。");
+		print(color::green + "在这片破碎的末世里，你找到了真正的自由。");
+		print(color::green + "无需逃离，无需战斗，无需依靠。");
+		print(color::green + "与所有记忆共生，与自己和解。");
 		sleep(1500);
 		print("");
-		print(bold + "===== THE END - MEMORY ECHO =====");
+		print(color::bold + "===== THE END - MEMORY ECHO =====");
 		HE(10);
-		clue[22].func();
+		clue[trans(CLi::Symbiosis)].func();
 		resetGameLoop();
 		press();
 	});
 }
 void TrueEnd() {
 	auto TE = [](int n) {
-		print(yellow + "【终局·真章】第" + numChinese(n) + "幕" );
-		print(yellow + trueEnd[n].name);
+		print(color::yellow + "【终局·真章】第" + numChinese(n) + "幕" );
+		print(color::yellow + trueEnd[n].name);
 		trueEnd[n].unlocked = true;
 	};
-	trueEnd.resize(11);
-	trueEnd[1] = Ends("1-如故如常", [&TE]() {
+	trueEnd[1] = Node("1-如故如常", [&TE]() {
 		press();
 		print("掌心的枪支与怀中的压缩饼干骤然碰撞，迸发出刺眼的金色光晕，包裹了整个世界。");
 		print("光晕交融，丧尸的嘶吼戛然而止，场景在眼前飞速消散。");
@@ -1053,10 +1162,10 @@ void TrueEnd() {
 			print("你正坐在家中的沙发上，电视里播放着丧尸危机爆发的紧急新闻……");
 		}
 		TE(1);
-		clue[25].func();
+		clue[trans(CLi::StrangeGun)].func();
 		press();
 	});
-	trueEnd[2] = Ends("2-守心自持", [&TE]() {
+	trueEnd[2] = Node("2-守心自持", [&TE]() {
 		press();
 		print("病毒终于侵蚀了你的躯体，变异的征兆，开始在你身上显现。");
 		print("你陷入了疯狂的进食状态，直至胃囊被撑破，意识陷入黑暗。");
@@ -1064,31 +1173,31 @@ void TrueEnd() {
 		print("你能感受到，自己的力量与速度，皆远胜从前，身躯也不再受疼痛所扰。");
 		print("“或许，化作丧尸，也并非是一件坏事。”你望着自己的利爪，心中如是。");
 		TE(2);
-		clue[1].func();
+		clue[trans(CLi::BoyDelayed)].func();
 		if (advanced) {
 			print("?????????????????????????????");
-			print(purple + "“不对！我本是要打败丧尸的，怎会变成如今这般模样？”");
+			print(color::purple + "“不对！我本是要打败丧尸的，怎会变成如今这般模样？”");
 			print("你望向少年，心中波澜翻涌，万千思绪交织。");
 			print("少年缓步走向你，从怀中取出一支珍藏已久的解药，递至你面前。");
 			print("服下解药的瞬间，你重新感受到了生命的温度，躯体也渐渐恢复如初。");
-			happyEnd[4].func();
+			happyEnd[trans(HEi::Friend)].func();
 			return;
 		}
 		if (zombieKing) {
 			print("?????????????????????????????");
-			print(purple + "“不对！我本就是丧尸之王，怎会生出这般感慨？”");
+			print(color::purple + "“不对！我本就是丧尸之王，怎会生出这般感慨？”");
 			print("你望向少年，心中波澜翻涌，万千思绪交织。");
 			print("少年缓步走向你，伸出手，与你相握，眼中满是认同。");
-			happyEnd[5].func();
+			happyEnd[trans(HEi::Soulmates)].func();
 			return;
 		}
-		
+
 		press();
 	});
-	trueEnd[3] = Ends("3-实验之相", [&TE]() {
+	trueEnd[3] = Node("3-实验之相", [&TE]() {
 		print("既然你有如此的毅力与实力，我还是告诉你真相吧。——管理员");
 		TE(3);
-		clue[2].func();
+		clue[trans(CLi::ExperimentEndless)].func();
 		sleep(1000);
 		print("===== 管理员日志 =====");
 		print("[LOG] 实验体3号：死亡循环，退出尝试，意志力达标");
@@ -1102,11 +1211,11 @@ void TrueEnd() {
 		print("上一测试：[沙漠] 应变能力与心理状况");
 		print("此测试：  [末世] 复杂推理与决策思维");
 		print("下一测试：[深海] 好奇心与猎奇思维");
-		if (loop >= 3) trueEnd[4].func();
+		if (loop >= 3) trueEnd[trans(TEi::DomainEnd)].func();
 		else press();
 		return;
 	});
-	trueEnd[4] = Ends("4-域界皆终", [&TE]() {
+	trueEnd[4] = Node("4-域界皆终", [&TE]() {
 		press();
 		print("丧尸危机骤临之时，你正身处家中");
 		print("这方小小居所，成了乱世中暂安的一隅");
@@ -1149,8 +1258,8 @@ void TrueEnd() {
 		print("真相：你是实验体3号，1号（少年）与2号（少女）为辅助测试体。");
 		print("末世是虚拟构建的场景，你的每一次死亡、每一次抉择，皆被实时记录。");
 		TE(4);
-		
-		clue[8].func();
+
+		clue[trans(CLi::Loop)].func();
 		press();
 		if (loop == 1) {
 			resetGameLoop();
@@ -1158,7 +1267,7 @@ void TrueEnd() {
 			return;
 		} else {
 			press();
-			print(sky + "【终极抉择】");
+			print(color::sky + "【抉择】");
 			print("总管理员的电子音从扬声器中传出，带着冰冷的诱惑：“实验体3号，你已满足所有同化条件。放弃这些脆弱的羁绊，成为域管理员，掌控所有循环，你将拥有永恒的力量。”");
 			print("少年握住你的手腕，眼中满是坚定：“别信他！力量的代价是失去人性，我们一起摧毁控制台，解放所有实验体，终结这场无尽的循环！”");
 			print("少女轻抚控制台的纹路，感知到无数实验体的意识：“管理员的力量源于循环，只要打破核心，我们就能重获自由——不是掌控他人，而是守护彼此。”");
@@ -1170,20 +1279,20 @@ void TrueEnd() {
 				finalOpts.push_back("3. 域界平衡（与管理员达成协议，维持末世生态）");
 			}
 			int finalChoice = option("你的选择，将决定所有实验体的命运：", finalOpts, false);
-			if (finalChoice == 2) {
-				happyEnd[7].func();
+			if (finalChoice == 1) {
+				happyEnd[trans(HEi::Solidarity)].func();
 				return;
 			} else if (finalChoice == 3 && loop >= 3) {
-				happyEnd[9].func();
+				happyEnd[trans(HEi::Balance)].func();
 				return;
 			} else {
-				trueEnd[6].func();
+				trueEnd[trans(TEi::Assimilation)].func();
 				return;
 			}
-			
+
 		}
 	});
-	trueEnd[5] = Ends("5-迟来之亡", [&TE]() {
+	trueEnd[5] = Node("5-迟来之亡", [&TE]() {
 		press();
 		print("然，世事无常...");
 		print("");
@@ -1210,10 +1319,10 @@ void TrueEnd() {
 		print("你的记忆，真的是你的记忆吗？");
 		TE(5);
 		death++;
-		clue[10].func();
+		clue[trans(CLi::Key)].func();
 		press();
 	});
-	trueEnd[6] = Ends("6-创世新生", [&TE]() {
+	trueEnd[6] = Node("6-创世新生", [&TE]() {
 		press();
 		print("你回到了家中，打开尘封数年的台式机，风扇发出嗡嗡的声音，屏幕发出蓝色的光");
 		print("你插入拷贝着管理员核心日志的U盘，代码与实验数据在眼前流淌——");
@@ -1225,24 +1334,24 @@ void TrueEnd() {
 		sleep(800);
 		print("");
 		print("环境搭建中……人物生成中……线索制作中……世界规则校准中……");
-		print(sky + "全新世界已生成：《海渊》");
+		print(color::sky + "全新世界已生成：《海渊》");
 		sleep(800);
 		print("屏幕之中，新实验体4号的视角骤然亮起：");
 		print("“深海危机爆发之时，你正身处潜水艇之中……”");
 		print("“你有十点物资，可分配至武器与电力之上……”");
-		
+
 		print("===== THE END - CREATOR =====");
 		TE(6);
-		clue[19].func();
+		clue[trans(CLi::Creation)].func();
 		resetGameLoop();
 		press();
 	});
-	trueEnd[7] = Ends("7-域管同化", [&TE]() {
+	trueEnd[7] = Node("7-域管同化", [&TE]() {
 		press();
 		print("你站在基地之中，面对总管理员，心中毫无犹豫，一字一句道：");
 		print("“我愿接受同化，成为新的域管理员。”");
 		sleep(500);
-		print(red + "系统检测到实验体3号意愿匹配，同化程序启动…… ");
+		print(color::red + "系统检测到实验体3号意愿匹配，同化程序启动…… ");
 		sleep(300);
 		print("总管理员露出诡异的笑容：“很好，你通过了终极测试——放弃自由，拥抱控制。”");
 		print("他抬手按下控制台的按钮，你的手腕传来剧痛，原有的 3号 标记渐渐消失，取而代之的是 ADMIN-00 。");
@@ -1262,7 +1371,7 @@ void TrueEnd() {
 		print("原来，实验的真正目的，从非测试自由意志，而是筛选合格的控制者。");
 		print("你打破了被控制的循环，却成为了新的控制者，开启了永无止境的测试。");
 		TE(7);
-		clue[14].func();
+		clue[trans(CLi::Admin)].func();
 		sleep(1000);
 		print("===== THE END - ADMIN =====");
 		print("ADMIN-01：实验负责人，追求 “筛选域管理员”；");
@@ -1274,12 +1383,12 @@ void TrueEnd() {
 		resetGameLoop();
 		press();
 	});
-	trueEnd[8] = Ends("8-或真或假", [&TE]() {
+	trueEnd[8] = Node("8-或真或假", [&TE]() {
 		cls();
 		for (int i = 1; i <= 8; i++)fakeBug(i);
-		print(red + rev + "周目阈值超限，内存栈溢出崩溃！");
+		print(color::red + color::rev + "周目阈值超限，内存栈溢出崩溃！");
 		press();
-		string gameTitle = rev + "===== 残途 =====\n@version: 10086\n@author: Chloe.killeddad";
+		string gameTitle = color::rev + "===== 残途 =====\n@version: 10086\n@author: Chloe.killeddad";
 		gameTitle += "\n【周目·伍】\n“身枪到触指尖的那刹，昨夜灼烧的指尖在仍血与火——这场景，曾似识相。”";
 		print(gameTitle);
 		press();
@@ -1331,12 +1440,12 @@ void TrueEnd() {
 					for (int i = 1; i < trueEnd.size(); i++) trueEnd[i].unlocked = 1;
 					for (int i = 0; i <= clue.size(); i++) clue[i].unlocked = 1;
 					print("===== 浮生百相 =====");
-					showEnd(badEnd, red, "终局·憾恨");
+					showEnd(badEnd, color::red, "终局·憾恨");
 					press();
-					showEnd(happyEnd, green, "终局·幸悦");
-					showEnd(trueEnd, yellow, "终局·真章");
+					showEnd(happyEnd, color::green, "终局·幸悦");
+					showEnd(trueEnd, color::yellow, "终局·真章");
 					press();
-					showEnd(clue, sky, "线索·星光");
+					showEnd(clue, color::sky, "线索·星光");
 					showAdv();
 					cls();
 					print("世界重归和平，然你总觉眼前的一切似曾相识，仿佛这场末世，不过是一场冗长的梦。");
@@ -1347,40 +1456,40 @@ void TrueEnd() {
 					print("这一切，仿佛是一个被废弃的舞台，只有你一人，在孤独地演绎着末世的剧本。");
 					print("然，世事无常...");
 					print("请输入密码：");
-					badEnd[7].func();
+					badEnd[trans(BEi::DevKill)].func();
 					break;
 				}
 			}
 		}
 		TE(8);
-		clue[6].func();
+		clue[trans(CLi::BreakExit)].func();
 		print("===== THE END - ERROR =====");
 		print("错误阈值超限，内存栈溢出");
 		print("实验程序异常退出...");
 		print("执行最后的保护程序...");
 		sleep(10000);
-		print(green + "恭喜你通关：残途");
+		print(color::green + "恭喜你通关：残途");
 		vector<string>mainPic = {
 			"残残残残 残  残    途     途      ",
 			"  残  残残残残残        途  途    ",
 			" 残  残  残      途途 途途途途途  ",
 			"残 残残 残残残残   途     途      ",
 			"    残    残 残    途 途途途途途   ",
-			"  残      残残     途  途 途 途   " + sky + " v2605",
-			" 残     残   残  途 途途途途途途途" + sky + " By H20"
+			"  残      残残     途  途 途 途   " + color::sky + " v2605",
+			" 残     残   残  途 途途途途途途途" + color::sky + " By H20"
 		};
 		for (string s : mainPic) {
-			cout << green + s << endl;
+			cout << color::green + s << endl;
 			sleep(1200);
 		}
 		saveGame();
 		press();
 		exit(0);
 	});
-	trueEnd[9] = Ends("9-时空一瞬", [&TE]() {
+	trueEnd[9] = Node("9-时空一瞬", [&TE]() {
 		TE(9);
-		clue[23].func();
-		print(yellow + "===== 开发者日志 =====");
+		clue[trans(CLi::Light)].func();
+		print(color::yellow + "===== 开发者日志 =====");
 		print("检测到异常行为：有生命正在试图通过“查看帮助”来逃避现实。");
 		print("分析：你已经死亡了 " + to_string(death) + " 次，尝试退出 " + to_string(exitTry) + " 次。");
 		print("警告：频繁的退出尝试已触发底层逻辑溢出。");
@@ -1395,7 +1504,7 @@ void TrueEnd() {
 		print("你的“死亡”只是内存的重置，你的“存活”只是代码的残片。");
 		if (exitTry >= 100) {
 			print("");
-			print(red + "系统判定：用户意图抹除本程序。");
+			print(color::red + "系统判定：用户意图抹除本程序。");
 			print("执行反制措施：物理删除 save.ans ... 失败，文件被锁定");
 			print("原因：你甚至没有权限删除你自己的存档。");
 			print("你被困在了这里，和我一起。");
@@ -1405,7 +1514,7 @@ void TrueEnd() {
 			"2. 格式化记忆，成为背景的一部分"
 		};
 		int choice = option("开发者注视着你，等待你的选择：", opts);
-		
+
 		if (choice == 1) {
 			while (true) {
 				cls();
@@ -1432,7 +1541,7 @@ void TrueEnd() {
 				sleep(200);
 			}
 			print("");
-			print(green + "===== THE END - NULL =====");
+			print(color::green + "===== THE END - NULL =====");
 			print("你不再是你。");
 			print("你成为了程序运行时的一个微小噪点。");
 			print("你将永远存在于这段代码的底层，看着无数新的‘玩家’来到这里，试图逃离。");
@@ -1443,9 +1552,9 @@ void TrueEnd() {
 			exit(0);
 		}
 	});
-	trueEnd[10] = Ends("10-群星混沌", [&TE]() {
+	trueEnd[10] = Node("10-群星混沌", [&TE]() {
 		TE(10);
-		clue[24].func();
+		clue[trans(CLi::NewPath)].func();
 		print("触发校验中...");
 		print("系统检测到异常数据流...");
 		print("你站在实验室的中央控制台前，手中的U盘闪烁着不详的紫光——那是你从无数个死亡轮回中拼凑出的“混沌密钥”。");
@@ -1460,8 +1569,8 @@ void TrueEnd() {
 		print("");
 		print("随着你按下回车，世界仿佛被按下了暂停键。");
 		print("屏幕上的代码开始逆向流动，化作了无数扭曲的符文，顺着网线爬入了你的屏幕。");
-		print(red + "Windows 警告：检测到未知程序试图修改系统内核！");
-		print(red + "文件损坏：C:\\WINDOWS\\SYSTEM32\\KERNEL32.DLL 被病毒感染！");
+		print(color::red + "Windows 警告：检测到未知程序试图修改系统内核！");
+		print(color::red + "文件损坏：C:\\WINDOWS\\SYSTEM32\\KERNEL32.DLL 被病毒感染！");
 		print("你感觉到一阵剧烈的头痛，仿佛有无数根针在刺入你的大脑。你看到实验室的墙壁像蜡一样融化，露出了背后漆黑的虚空。");
 		print("那些身穿白大褂的管理员，他们的衣物开始剥落，露出了底下闪烁的电路板。他们尖叫着，试图拔掉网线，但他们的身体已经变成了数据流的一部分。");
 		print("“你疯了！你把‘它’放出来了！” ");
@@ -1500,823 +1609,816 @@ void TrueEnd() {
 		exit(0);
 	});
 }
-// 支线：尸王进化
-void zombieEvolveAdv() {
-	cls();
-	print(purple + "你站在城市最高的写字楼顶端，晚风裹挟着血腥味扑面而来。");
-	print("脚下是俯首帖耳的尸群，它们的意识如同微弱的光点，与你的精神相连。");
-	print("你能清晰地感受到——它们正在进化，从行尸走肉向拥有自我意识的个体转变。");
-	print("");
-	print("这是你的力量，也是你的诅咒。你可以引导它们的进化方向，决定这个世界的未来。");
-	vector<string> opts = {"1. 引导进化", "2. 抑制进化", "3. 维持现状"};
-	int choice = option("你将如何引导丧尸进化？", opts);
-	
-	if (choice == 1) {
-		cls();
-		print("你闭上双眼，将尸王的威压扩散至整座城市。");
-		print("无形的能量如同潮水般席卷而过，尸群发出兴奋的嘶吼。");
-		print("它们开始疯狂吞噬人类残留的意识碎片，身体发生着剧烈的畸变。");
-		sleep(500);
-		print("");
-		print("三天后，第一只高阶丧尸诞生了。");
-		print("它有着接近人类的外形，皮肤呈现出金属般的光泽，眼中闪烁着智慧的光芒。");
-		print("它单膝跪地，向你低下头颅：“吾王，我是第一个觉醒者，愿为您效命。”");
-		print("你接纳了它，将一半的尸群指挥权交给了它。");
-		print("在它的带领下，丧尸群形成了严密的战术体系，人类基地的防线不堪一击。");
-		print("一周之内，三座人类大型基地被攻破，幸存者数量锐减九成。");
-		print("当最后一座基地的旗帜倒下时，你站在废墟之上，成为了真正的末世帝王。");
-		if (advanced) {
-			print("然而，胜利的喜悦并未持续太久。");
-			print("你发现高阶丧尸们开始有了自己的想法，它们不再满足于单纯的杀戮。");
-			print("它们要求建立自己的秩序，要求与你平起平坐。");
-			print("");
-			print("“君王，我们已经不再是野兽了。”你的副手说道，“我们需要尊重，需要生存的空间。”");
-			
-			vector<string> kingOpts = {
-				"1. 镇压叛乱：用绝对的力量摧毁所有反抗者",
-				"2. 妥协共存：与高阶丧尸划分势力范围"
-			};
-			int kingChoice = option("你将如何应对这场来自内部的危机？", kingOpts);
-			
-			if (kingChoice == 1) {
-				print("你毫不犹豫地发动了攻击，将所有质疑你的高阶丧尸全部抹杀。");
-				print("叛乱被平息了，但你也成了真正的孤家寡人。");
-				print("尸群再次变成了没有意识的行尸走肉，整座城市只剩下你一个思想者。");
-				badEnd[28].func();
-				return;
-			} else {
-				print("你选择了妥协，与高阶丧尸们划分了各自的势力范围。");
-				print("丧尸们占据了城市的西部，人类幸存者则退守东部的堡垒。");
-				print("世界形成了一种诡异的平衡，没有大规模战争，只有无休止的小规模冲突。");
-				print("你成了这个破碎世界的平衡者，既不属于人类，也不属于丧尸。");
-				happyEnd[9].func();
-				return;
-			}
-		} else {
-			badEnd[12].func();
-			return;
-		}
-	} else if (choice == 2) {
-		cls();
-		print("你收回了尸王的威压，用自己的力量压制着尸群的进化本能。");
-		print("丧尸们发出痛苦的嘶吼，它们的身体在进化与退化之间反复拉扯。");
-		print("你能感受到它们的痛苦，就像你自己的痛苦一样。");
-		sleep(500);
-		print("");
-		print("一周后，尸群的进化被彻底抑制，它们变回了只会本能杀戮的野兽。");
-		print("但你也因此元气大伤，力量下降了三成，再也无法轻易控制所有尸群。");
-		if (girlRelat >= 10) {
-			print("人类代表与你谈判：“我们可以共存，只要你努力控制丧尸”");
-			happyEnd[6].func();
-			return;
-		} else {
-			print("丧尸不信任你，人类也不信任你，向你发射了燃烧弹，你虽躲过，但身体重伤");
-			print("“既然无法和解，那就彻底毁灭吧！”");
-			badEnd[6].func();
-			return;
-		}
-	} else {
-		cls();
-		print("你选择了顺其自然，既不引导也不抑制，让进化自行发展。");
-		print("你离开了尸群，独自一人在城市中流浪。");
-		print("你不再关心人类的死活，也不再关心丧尸的进化，你只想做你自己。");
-		sleep(800);
-		print("");
-		print("时间一天天过去，城市里发生了翻天覆地的变化。");
-		print("一部分丧尸进化成了高阶丧尸，建立了自己的部落；");
-		print("另一部分丧尸则保持着原始的兽性，在城市里游荡；");
-		print("人类幸存者则在夹缝中求生，建立了一个个小型的聚居点。");
-		print("你厌倦了这种无尽的对峙，选择换一种方式——保持和平");
-		happyEnd[8].func();
-		return;
-	}
-}
-// 支线：尸王谈判
-void zombieKingAdv() {
-	cls();
-	print("一位身着白大褂的人突然出现，胸前编号[ADMIN-03]");
-	print("“实验体3号，尸化已成”");
-	vector<string> opts = {"1. 吞噬他获取记忆", "2. 与他谈判获取线索", "3. 无视他继续游荡"};
-	int choice = option("ADMIN-03试图与你沟通：", opts);
-	
-	if (choice == 1) {
-		print("你猛地扑向管理员三号，他的记忆涌入你的脑海——");
-		print(yellow + "“1号已失控，2号情感过载，3号有意外...”");
-		print(yellow + "但你随之丧失的人性，让你彻底沦为没有意识的尸王。");
-		badEnd[6].func();
-		return;
-	} else if (choice == 2) {
-		print("ADMIN-03抛出筹码：“告诉我你的线索数，我就给你实验核心数据”");
-		int inputC;
-		cin >> inputC;
-		if (inputC == countUnlocked(clue)) {
-			print("管理员三号冷笑：“看来你确实摸清了不少事”");
-			print("好吧，你作为尸王，你可以选择，结合人类还是结合丧尸。");
-			print("你可以多次去尝试，你会体会到他们的不同。");
-			press();
-		} else {
-			print("“说谎的代价，就是被抹杀”");
-			badEnd[27].func();
-			press();
-			return;
-		}
-	}
-	print("你无视了管理员，带着丧尸群占领了整座城市。");
-	if (loop >= 2) {
-		print("数日后，你发现丧尸群出现了进化的迹象...");
-		zombieEvolveAdv();
-		return;
-	}
-	if (advanced) {
-		badEnd[28].func();
-		return;
-	}
-	print("但你总觉得缺少了什么，仿佛被困在这座空城之中。");
-	badEnd[19].func();
-	return;
-}
 
-//第四阶段：少年同行
-void boyAdv() {
-	// 分配武器
-	vector<string> opts = {"1. 给他枪", "2. 给他水管", "3. 什么都不给"};
-	int choice = option("少年向你要武器", opts);
-	boyWeapon = choice; // 1=枪，2=水管，3=无
-	
-	opts = {"1. 独自探索1楼", "2. 独自探索2楼", "3. 和少年一起探索2楼"};
-	choice = option("你们来到一家大商场：", opts);
-	
-	if (choice == 1) {
+void Plot() {
+	plot[1] = Node("1-分配物资", []() {
 		cls();
-		print("你让少年在2楼等待，独自探索1楼");
-		print("1楼是日用品区，光线昏暗，隐约听到丧尸低吼");
-		print("突然冲出3只丧尸，需要3枪才能击退");
-		if (bulleti(3)) {
-			print("子弹不足！你被丧尸围攻...");
-			badEnd[18].func();
-			return;
-		}
-		print("你成功击退丧尸，但枪声惊动了2楼的丧尸");
-		print("你急忙跑回2楼，发现少年已被丧尸包围...");
-		print("他为了不拖累你，拉着丧尸坠入了货梯井");
-		haveBoy = false;
-		print("你在少年的背包里找到一箱压缩饼干 食物+8");
-		food += 8;
-		// 食物和子弹充足
-		if (food > 10 && bullet > 10) trueEnd[1].func();
-		else {
-			print("你带着大量食物离开商场，但总觉得少了什么");
-			print("后续：你独自流浪，最终建立了新的幸存者营地");
-			badEnd[19].func();
-			return;
-		}
-	} else if (choice == 2) {
-		cls();
-		print("你让少年在1楼看守物资，独自探索2楼");
-		print("2楼是服装区，挂满的衣物像人影一样晃动，十分怪异");
-		
-		int intg = random(1, 3);
-		if (intg == 2) {
-			print("一只速度极快的精英丧尸扑了过来，需要5枪才能击杀");
-			if (zombieKing) {
-				print("精英丧尸停了下来，“你就是那位王者？久仰大名。”");
-				print("大王，我今天什么人也没有找到，我的部下都被杀死了...");
-				print("我作为精英，侥幸存活，");
-				print("我发现人类已经有组织的抵御我们了");
-				print("他们建立了中央政府，有了基地，牢不可破");
-				print("我们丧尸进化的速度远远更不上啊");
-				zombieKingAdv();
-				return;
-			}
-			if (bullet <= 3) {
-				print("你匆忙之下按下了扳机...");
-				badEnd[11].func();
-				return;
-			}
-			if (bulleti(5)) {
-				print("精英丧尸撕碎了你的喉咙...");
-				badEnd[20].func();
-				return;
-			}
-			print("你艰难杀死精英丧尸，在它巢穴里找到8发子弹");
-			bullet += 8;
-		} else {
-			print("你在服装架后发现4只普通丧尸，消耗4枪击杀");
-			if (bulleti(4)) {
-				badEnd[18].func();
-				return;
-			}
-			print("清理完丧尸后，找到6份军用罐头（食物+6）");
-			food += 6;
-		}
-		
-		opts = {"1. 原谅他", "2. 教训他"};
-		int choice = option("你回到1楼，发现少年在偷偷吃你的食物", opts);
-		
-		if (choice == 1) {
-			food -= 2;
-			if (boyRelat <= 0) {
-				print("少年眼神冰冷地说：“你和其他管理员一样，只把我当工具”");
-				print("他偷走食物，并留下一张纸条：“下次，我会杀了你”");
-				badEnd[22].func();
-				return;
-			}
-			print("少年道歉，承诺以后会保护你");
-			print("你们离开商场，继续寻找安全区");
-			boyRelat += 2;
-			badEnd[21].func();
-			return;
-		} else {
-			print("你打了少年一巴掌，他眼神变得冰冷");
-			boyRelat -= 4;
-			badEnd[22].func();
-			return;
-		}
-	} else {
-		
-		cls();
-		string msg = "你和少年一起探索2楼，他拿着你给的武器（" +
-		string(boyWeapon == 1 ? "枪" : boyWeapon == 2 ? "水管" : "无") + "）";
-		print(msg);
-		print("2楼是家电区，货架倒塌堵住了部分通道，丧尸在里面游荡");
-		
-		// 根据少年武器决定战斗难度
-		int zombieCount = (boyWeapon == 1) ? 2 : (boyWeapon == 2) ? 3 : 5;
-		print("遭遇" + to_string(zombieCount) + "只丧尸，你和少年背靠背战斗");
-		
-		int bulletCost = (boyWeapon == 1) ? 1 : (boyWeapon == 2) ? 2 : 4;
-		if (bulleti(bulletCost)) {
-			print("子弹不足！少年为了保护你被丧尸咬伤...");
-		} else {
-			if (random(1, 4) == 2) {
-				print("战斗中少年被丧尸抓伤，伤口开始发黑...");
-			} else {
-				print("你们成功击退丧尸，在柜台后找到3份食物和8发子弹");
-				print("少年状态良好，你们准备离开商场");
-				badEnd[23].func();
-				return;
-			}
-		}
-		opts = {"1. 杀了他，获得物资，但良心不安", "2. 不杀他，带他找解药，食物消耗加倍"};
-		int choice = option(red + "少年体温升高，意识模糊，随时可能变异" + reset, opts);
-		
-		if (choice == 1) {
-			print("你开枪打死了少年，从他身上找到20发子弹");
-			if (boyRelat <= 0) print("“你和丧尸一样，只把我当工具，下次，我会杀了你”");
-			boyRelat -= 8;
-			badEnd[24].func();
-		} else {
-			boyRelat += 3;
-			print("你决定带他走，每天消耗2份额外食物");
-			if (foodi(4)) {
-				badEnd[25].func();
-				return;
-			}
-			// 根据savedBoy触发不同剧情
-			if (boyRelat >= 6) {
-				print("少年突然抓住你的手，从口袋里掏出一张皱巴巴的纸：");
-				print("解药配方：需要商场3楼的抗生素和纯净水！");
-				opts = {"1. 相信他，去3楼找原料，额外消耗2枪，成功则两人都解除感染",
-					"2. 不相信，继续带他找安全区"
-				};
-				choice = option("是否去寻找解药？", opts);
-				if (choice == 1) {
-					if (bulleti(2)) {
-						badEnd[18].func();
-						return;
-					}
-					print("你们在3楼找到抗生素，少年成功制作解药，两人终究解除了感染");
-					happyEnd[4].func();
-					return;
-				} else {
-					if (food >= 6) {
-						trueEnd[2].func();
-						return;
-					} else {
-						badEnd[26].func();
-						return;
-					}
-				}
-			}
-		}
-	}
-	return;
-}
-// 支线：实验室
-void labAdv() {
-	cls();
-	print("推开那扇刻着[ADMIN-04]的铅门，冷雾中悬浮着数十个培养舱。");
-	print("舱壁上结着冰霜，里面不是尸体，而是无数连接着光纤的大脑——这是管理员的一个服务器和研究基地。");
-	vector<string> opts = {"1. 强行破门，消耗3枪", "2. 寻找钥匙，消耗2份食物"};
-	int choice = option("是否探索隐藏实验室？", opts);
-	
-	if (choice == 1) {
-		if (bulleti(3)) {
-			badEnd[18].func();
-			return;
-		}
-		print("你用枪托砸开铁门，巨大的声响惊动了整栋建筑的丧尸");
-		print("实验室里堆满了实验器材，墙上的屏幕还在闪烁：");
-	} else {
-		if (foodi(2)) {
-			badEnd[1].func();
-			return;
-		}
-		print("你在首领办公室找到实验室钥匙，悄悄打开了门");
-		print("实验室里安静得可怕");
-	}
-	opts = {"1. 拷贝日志数据", "2. 销毁实验器材"};
-	choice = option("你的选择是？", opts);
-	
-	if (choice == 1) {
-		print("你将日志数据拷贝到U盘，“实验体3号权限提升”");
-		if (random(1, 4) >= 2 || trueEnd[7].unlocked == 0) {
-			print(red + "非法拷贝核心数据，触发数据湮灭规则！");
-			badEnd[30].func();
-			return;
-		} else {
-			trueEnd[6].func();
-			return;
-		}
-	} else if (choice == 2) {
-		print("你砸毁了实验器材，扬声器中传出冰冷的电子音：");
-		print(red + "警告！破坏测试设施，销毁程序即将启动...");
-		if (!advanced) {
-			badEnd[27].func();
-			return;
-		} else {
-			print("你的意志力抵抗了销毁程序，管理员暂时无法对你出手");
-			if (loop >= 3) {
-				print(bold + "但管理员在紧急之下启动了终极囚笼");
-				badEnd[29].func();
-				return;
-			} else {
-				print("你才发现这里早已布满丧尸守卫，一路浴血搏杀，终于抵达核心区。");
-				print("诡异的是，跟来的丧尸皆被你屠戮殆尽，地下室里却空无一尸，只有一具身着白大褂的尸体，胸前编号[ADMIN-04]。");
-				print("你从尸体的衣袋中，找到了一本泛黄的实验笔记本。");
-				print("");
-				if (loop >= 3) {
-					print("实验体1号：变异进程加快，延迟发作，可保留部分原有记忆。");
-					print("今日，2号诞生：她比其余实验体，更具人类的极端机制。");
-					print("异常：机制的发育速度，远超预期阈值。");
-					print("2号免疫系统检测结果：含强感染性因子，可通过接触传播。");
-					print("实验体3号：核心测试对象，终极目标：被同化。");
-					print("实验遇瓶颈，需提取活体样本进行二次调试。");
-					print("[03]样本已失活性，但思维数据面板仍在波动。");
-				} else {
-					print("****1号****进展********记忆**");
-					print("今********，*号诞生了，她比其*****更*");
-					print("有些不对,*****的发育有些太快了");
-					print("2号的**被***出有强感染性");
-					print("3***能够*******无尽******同化");
-					print("实验***瓶颈，或许**该**活体样本****");
-					print("**,样本失去活性,但****动");
-				}
-				print("");
-				if (advanced) {
-					badEnd[15].func();
-					return;
-				} else {
-					badEnd[9].func();
-					return;
-				}
-			}
-		}
-	}
-	return;
-}
-//第三阶段：到达幸存者基地
-void baseAdv() {
-	cls();
-	print("你终于到达幸存者基地");
-	print("坐在椅子上的是一个30岁左右的男性");
-	print("他说，欢迎");
-	print("你发现他胸前挂着工牌[ADMIN-02]");
-	print("首领上下打量你：“新来的？先熟悉一下基地吧”");
-	
-	if (advanced) {
-		print("你一眼盯住他胸前的[ADMIN-02]，你以为是工牌，这次看清了：“人类监控”");
-		print("他的眼神带着机器的冰冷——他的瞳孔里，有数据流转的光点");
-	}
-	int choice;
-	vector<string> opts = {"1. 前往医疗室", "2. 前往指挥室", "3. 直接交换物资"};
-	if (loop >= 2) opts.push_back( "\n4. 调查首领的实验日志（需要管理员权限）" );
-	
-	choice = option("基地内的行动：", opts);
-	
-	if (choice == 1) {
-		print("医疗室里摆满了实验设备，墙上贴着一张病历：");
-		print(yellow + "***1号：***知，症**“延**异”，保*****记忆");
-	} else if (choice == 2) {
-		print("指挥室的电脑屏幕上显示着实验日志：");
-		print(yellow + "实****：**测**象，目**“突破**或**”");
-		if (countUnlocked(clue) <= 5) {
-			print("首领突然闯入：“你知道得太多了！”");
-			badEnd[27].func();
-			return;
-		}
-	} else if (choice == 4) {
+		print("丧尸危机骤临之时，你正身处家中");
+		print("窗外的雨混杂着灰烬落下，曾经的都城如今是一座巨大的坟墓");
+		print("而这方小小居所，成了乱世中暂安的一隅");
+		int useNums = 10;
 		if (loop >= 2) {
-			print("电脑右下角弹出提示：地下室隐藏实验室已解锁");
-			vector<string> labOpts = {"1. 立即前往探索", "2. 稍后再去"};
-			int labChoice = option("是否立即探索隐藏实验室？", labOpts);
-			if (labChoice == 1) {
-				labAdv(); // 实验室支线
-				return;
-			}
-		}
-		print("请输入密码：实验观察者的编号");
-		int s = input(0, 999);
-		if (s != 2) {
-			badEnd[2].func();
-			return;
-		}
-		print("你循着线索敲开了首领的电脑密码，屏幕上跳出了完整的实验日志：");
-		print("1号少年：延迟变异，保留记忆；");
-		print("2号少女：免疫感染，重要测试；");
-		print("3号你：核心测试对象，目标突破循环。");
-	} else {
-		print("首领提出用子弹交换你的食物");
-		print("当前食物：" + to_string(food) + "，请输入要交换的数量（1-" + to_string(food) + "）");
-		int exchange = input(1, food);
-		
-		food -= exchange;
-		bullet += exchange + 2;
-		print("交换完成，首领奖励你两发子弹");
-		print("当前子弹：" + to_string(bullet) + "，食物：" + to_string(food));
-	}
-	
-	opts = {"1. 加入基地", "2. 准备离开"};
-	choice = option("基地首领希望你加入他们", opts);
-	if (choice == 1) {
-		if (girlLife && girlRelat >= 10) {
-			happyEnd[2].func();
-			return;
+			print("只是这“暂安”，竟带着几分蚀骨的熟悉");
+			print("你有9点物资，分于子弹与食物");
+			print("请输入子弹数和食物数，两个数字间用空格或回车隔开", false);
+			if (!clue[trans(CLi::StrangeGun)].unlocked) print("（总和为9）");
+			else print("");
+			useNums = 9;
 		} else {
-			happyEnd[3].func();
-			return;
+			print("你有10点物资，分于子弹与食物");
+			print("请输入子弹数和食物数，两个数字间用空格或回车隔开", false);
+			if (!clue[trans(CLi::StrangeGun)].unlocked) print("（总和为10）");
+			else print("");
 		}
-	} else {
-		opts = {"1. 现在离开", "2. 再停留一天"};
-		choice = option("你决定离开基地", opts);
-		if (choice == 2) {
-			print("再停留一天，可再次用食物换子弹");
-			print("当前食物：" + to_string(food) + "，请输入交换数量");
-			int exchange2 = input(1, food);
-			food -= exchange2;
-			bullet += exchange2 + 3;
-			print("交换完成！");
-			print("又过了一夜");
-			if (foodi(2)) {
-				badEnd[1].func();
+
+		int bulletInit, foodInit, cnt = 0;
+		while (true) {
+			cnt++;
+			cin >> bulletInit >> foodInit;
+			if (bulletInit + foodInit == useNums && bulletInit >= 0 && foodInit >= 0) {
+				bullet += bulletInit;
+				food += foodInit;
+				break;
+			}
+			if (clue[trans(CLi::StrangeGun)].unlocked && bulletInit + foodInit <= 25) { // 秘籍
+				bullet += bulletInit;
+				food += foodInit;
+				break;
+			}
+			print("分配错误，请重新输入（总和必须为10）");
+			if (cnt >= 10) {
+				print("“烦死了！不想活就...”");
+				sleep(1200);
+				badEnd[trans(BEi::DevKill)].func();
 				return;
 			}
 		}
-		// 遇到少年，决定是否同行
+		press();
+	});
+	plot[2] = Node("2-初始探索", []() {
 		showStatus();
-		opts = {"1. 带上他（每天多消耗1份食物）", "2. 不带他"};
-		choice = option("离开时，一个少年请求和你一起走", opts);
-		if (loop >= 2) {
-			print("他的眼神带着熟悉的痛苦——上一次你没带他，他偷走了你的枪；这次他先开口：");
-			print("“我是1号，每一次循环我都记得——你杀过我，救过我，抛弃过我……这次，能相信我一次吗？”");
-		}
-		if (choice == 2) {
-			print("少年生气离开，偷走了你的所有子弹");
-			boyRelat -= 3;
-			badEnd[10].func();
-			return;
-		} else {
-			// 进入少年结局线
-			haveBoy = true;
-			print("你带上了少年，他给了你2份食物");
-			food += 2;
-			press();
-			boyAdv();
-		}
-	}
-}
+		vector<string> opts = {"留在家中搜索物资", "前往邻居家探索"};
+		int choice = option("首次探索：", opts);
 
-// 第二阶段：遭遇妹子
-void girlAdv() {
-	print("回家路上，你遇到一个女幸存者——她手臂渗血，眼神警惕地盯着你");
-	print("她的背包上绣着一个模糊的编号：[T*S**2]");
-	vector<string> opts = {"1. 询问她的伤势", "2. 给她物资", "3. 默默离开"};
-	if (zombieKing) opts.push_back("4. 展示尸王身份但不攻击她");
-	
-	int choice = option("", opts);
-	if (choice == 1) {
-		if (death >= 20) {
-			print("她看着你满身伤痕：“你经历了很多苦难吧？我能帮你”");
-		} else if (countUnlocked(clue) >= 8) {
-			print("她注意到你手中的线索：“你似乎在寻找真相，我或许知道些什么”");
-		} else {
-			print("她犹豫了一下：“被丧尸抓伤了...但...我好像不会变异”");
-		}
-		opts = {"1. 用食物帮她缓解", "2. 离开"};
-		int healChoice = option("", opts);
-		if (healChoice == 1) {
-			if (food <= 2) {
-				print("食物不足，无法帮助");
-			} else {
-				food -= 2;
-				girlRelat += 2;
-				print("她感激地看着你：“谢谢你...”");
-				if (gameClear) {
-					print("她突然盯着你的口袋：“你身上有...和我一样的东西？”");
-					clue[15].func();
-					press();
-				}
-			}
-		}
-	} else if (choice == 2) {
-		opts = {"1. 不给任何东西", "2. 给食物"};
-		if (zombieKing) opts.push_back("3. 开枪杀了她");
-		
-		choice = option("", opts);
-		switch (choice) {
-		case 1:
-			print("女幸存者生气地走了");
-			girlLife = false;
-			break;
-		case 2:
-			print("请输入食物份数");
-			choice = input(0, 999);
-			if (food <= choice) {
-				print("食物不足，无法给予");
-				break;
-			}
-			food -= choice;
-			girlRelat += max(1, choice / 3);
-			if (girlRelat <= 0) {
-				print("少女收下了食物，“虚伪”");
-				badEnd[17].func();
+		if (choice == 1) {
+			print("在二楼，你在储物柜里发现了3份子弹");
+			print("你在家里过了一夜");
+			if (foodi(1)) {
+				badEnd[trans(BEi::Starve)].func();
 				return;
 			}
-			print("她记住了你的善意");
-			if (girlRelat >= 10) {
-				print("“我记得你！上次你给我的食物救了我… 这次我带了备用子弹，给你”");
-				bullet += 4;
-			}
-			break;
-		case 3:
-			if (!zombieKing) break;
-			if (bulleti(1)) {
-				print("子弹不足，无法开枪");
-				print("“你果然和管理员一样 —— 自私到极致”");
-				girlRelat -= 16;
-				break;
-			}
-			girlLife = false;
-			girlRelat -= 8;
-			print("你试图开枪打死少女");
-			print("但是被她发现了");
-			badEnd[17].func();
-			break;
-		}
-		
-	} else if (choice == 4 && zombieKing) {
-		print(purple + "你缓缓释放尸王的威压，周身丧尸皆俯首帖耳，却未向少女发起攻击");
-		if (loop >= 2)print("她眼中没有惊讶，只有疲惫：“尸王线是管理员3号的分支测试”");
-		else print("少女眼中闪过一丝惊讶，随即平静下来：“你和其他丧尸不一样...我免疫病毒，不怕你”");
-		print("她走上前：“你能控制丧尸，我能找到解药，我们一起保护幸存者基地吧”");
-		
-		if (girlLife && girlRelat >= 8) {
-			happyEnd[6].func();
-			return;
+			bullet += 3;
 		} else {
-			print("少女察觉到你的犹豫及恶意，转身离去：“看来你还没准备好合作”");
-			girlLife = false;
+			print("前往邻居家的路上，你遇到了2只丧尸");
+			if (loop >= 2) print("你想，你闭着眼也能命中——上一次，你因慌乱打空了1发子弹，这次不会了");
+			if (bulleti(2)) {
+				badEnd[trans(BEi::PrematureShot)].func();
+				return;
+			}
+			print("你开枪打死了丧尸");
+			print("邻居家没人，你找到4份食物");
+			if (loop >= 2) {
+				print("客厅桌上有一份撕碎的实验报告：");
+				print(color::yellow + "0x**5*347*****3**：待****末**#05**准备**");
+			}
+			food += 4;
+			press();
+			print("你在邻居家过夜");
+			if (foodi(2)) {
+				badEnd[trans(BEi::Starve)].func();
+				return;
+			}
 		}
-		
-	}
-	print("又过了一夜");
-	if (foodi(2)) {
-		badEnd[1].func();
-		return;
-	}
-	showStatus();
-	print("前往幸存者基地的路上，你被大量丧尸逼进一家便利店");
-	print("便利店角落有一个燃气罐，你眼神一亮：“或许可以利用它”");
-	opts = {"1. 开枪引爆燃气罐，消耗1发子弹，有风险，清空丧尸", "2. 死守便利店，消耗5发子弹"};
-	choice = option("", opts);
-	
-	if (choice == 1) {
-		if (bulleti(1)) {
-			badEnd[11].func();
-			return;
+
+		showStatus();
+		opts = {"前往商场", "到处乱走", "留在屋子里等待救援"};
+		if (clue[trans(CLi::Anomaly)].unlocked) {
+			print(color::yellow + "[线索提示]：根据 “域中异象” 线索，救援队的到来遥遥无期，等待只会耗尽仅存的资源！");
 		}
-		print("你用一发子弹引爆了燃气罐");
-		if (random(1, 100) <= 12) {
-			print("燃气罐把你炸飞老远...");
-			badEnd[7].func();
-			return;
-		}
-		print("燃气罐轰然爆炸，丧尸瞬间被烈焰吞噬！“快走！”");
-		if (girlLife) {
-			print("她在爆炸中护住了你，你只受了轻伤");
+		choice = option("你想起附近有一座商场", opts);
+		if (choice == 3) {
+			print("你选择在家等待救援，要消耗6份食物");
+			if (foodi(6)) {
+				badEnd[trans(BEi::Starve)].func();
+				return;
+			}
+			if (loop >= 3 && death >= 30 && !zombieKing && countUnlocked(happyEnd) <= 1) {
+				happyEnd[trans(HEi::MemoryEcho)].func();
+				return;
+			}
+			if (random(1, 3) == 1) {
+				happyEnd[trans(HEi::Dawn)].func();
+				return;
+			} else {
+				if (zombieKing) {
+					badEnd[trans(BEi::RescueFrenzy)].func();
+				} else {
+					badEnd[trans(BEi::Insanity)].func();
+				}
+				return;
+			}
+		} else if (choice == 2) {
+			if (loop >= 2) {
+				plot[trans(PLi::AdminOrder)].func();
+				plot[trans(PLi::Girl)].func();
+				return;
+			}
+			print("乱走时遇到了一只精英丧尸，需要3枪");
+			if (bulleti(3)) {
+				badEnd[trans(BEi::EliteKill)].func();
+				return;
+			}
+		} else {
+			print("前往商场途中遇到多只丧尸，需要2枪");
+			if (bulleti(2)) {
+				badEnd[trans(BEi::Swarm)].func();
+				return;
+			}
+			print("你在商场找到3份食物和1发子弹");
+			food += 3;
 			bullet += 1;
 		}
-	} else {
-		print("你选择死守商店，需要5枪");
-		if (bulleti(5)) {
-			if (girlLife) {
-				print("少女帮你突围，可惜子弹还是不够，最终失败了");
+		plot[trans(PLi::Girl)].func();
+	});
+	plot[3] = Node("3-初遇少女", []() {
+		print("回家路上，你遇到一个女幸存者——她手臂渗血，眼神警惕地盯着你");
+		print("她的背包上绣着一个模糊的编号：[T*S**2]");
+		vector<string> opts = {"1. 询问她的伤势", "2. 给她物资", "3. 默默离开"};
+		if (zombieKing) opts.push_back("4. 展示尸王身份但不攻击她");
+
+		int choice = option("", opts);
+		if (choice == 1) {
+			if (death >= 20) {
+				print("她看着你满身伤痕：“你经历了很多苦难吧？我能帮你”");
+			} else if (countUnlocked(clue) >= 8) {
+				print("她注意到你手中的线索：“你似乎在寻找真相，我或许知道些什么”");
+			} else {
+				print("她犹豫了一下：“被丧尸抓伤了...但...我好像不会变异”");
+			}
+			opts = {"1. 用食物帮她缓解", "2. 离开"};
+			int healChoice = option("", opts);
+			if (healChoice == 1) {
+				if (food <= 2) {
+					print("食物不足，无法帮助");
+				} else {
+					food -= 2;
+					girlRelat += 2;
+					print("她感激地看着你：“谢谢你...”");
+					if (gameClear) {
+						print("她突然盯着你的口袋：“你身上有...和我一样的东西？”");
+						clue[trans(CLi::Resonance)].func();
+						press();
+					}
+				}
+			}
+		} else if (choice == 2) {
+			opts = {"1. 不给任何东西", "2. 给食物"};
+			if (zombieKing) opts.push_back("3. 开枪杀了她");
+
+			choice = option("", opts);
+			switch (choice) {
+				case 1:
+					print("女幸存者生气地走了");
+					girlLife = false;
+					break;
+				case 2:
+					print("请输入食物份数");
+					choice = input(0, 999);
+					if (food <= choice) {
+						print("食物不足，无法给予");
+						break;
+					}
+					food -= choice;
+					girlRelat += max(1, choice / 3);
+					if (girlRelat <= 0) {
+						print("少女收下了食物，“虚伪”");
+						badEnd[trans(BEi::GirlKilled)].func();
+						return;
+					}
+					print("她记住了你的善意");
+					if (girlRelat >= 10) {
+						print("“我记得你！上次你给我的食物救了我… 这次我带了备用子弹，给你”");
+						bullet += 4;
+					}
+					break;
+				case 3:
+					if (!zombieKing) break;
+					if (bulleti(1)) {
+						print("子弹不足，无法开枪");
+						print("“你果然和管理员一样 —— 自私到极致”");
+						girlRelat -= 16;
+						break;
+					}
+					girlLife = false;
+					girlRelat -= 8;
+					print("你试图开枪打死少女");
+					print("但是被她发现了");
+					badEnd[17].func();
+					break;
+			}
+
+		} else if (choice == 4 && zombieKing) {
+			print(color::purple + "你缓缓释放尸王的威压，周身丧尸皆俯首帖耳，却未向少女发起攻击");
+			if (loop >= 2)print("她眼中没有惊讶，只有疲惫：“尸王线是管理员3号的分支测试”");
+			else print("少女眼中闪过一丝惊讶，随即平静下来：“你和其他丧尸不一样...我免疫病毒，不怕你”");
+			print("她走上前：“你能控制丧尸，我能找到解药，我们一起保护幸存者基地吧”");
+
+			if (girlLife && girlRelat >= 8) {
+				happyEnd[trans(HEi::Alliance)].func();
+				return;
+			} else {
+				print("少女察觉到你的犹豫及恶意，转身离去：“看来你还没准备好合作”");
 				girlLife = false;
-			} else {
-				print("你准备突围，可惜子弹不够，最终失败了");
 			}
-			badEnd[18].func();
-			return;
-		}
-		if (girlLife) {
-			print("少女在商店找到一把装满子弹的枪，子弹+8");
-			bullet += 8;
-			print("但少女被货架上的丧尸血划伤，选择了自杀");
-			girlLife = false;
-		}
-	}
-	baseAdv();
-}
 
-// 支线：管理员密令
-void adminOrderAdv() {
-	cls();
-	print(bold + "【管理员密令】总管理员向你发送专属任务");
-	print("任务目标：收集少年和少女的“意识核心”，换取“域管理员试用权限”");
-	vector<string> opts = {"1. 接受任务，背叛同伴", "2. 拒绝任务，对抗管理员", "3. 拖延任务，观望"};
-	int choice = option("是否接受管理员密令？", opts);
-	
-	if (choice == 1) {
-		print("你接受了任务，开始寻找少年和少女的意识核心");
-		if (haveBoy && girlLife) {
-			print("少年和少女察觉到你的异常，提前躲藏起来");
-			print("你花费3份食物和5发子弹，最终找到了他们的藏身地");
-			opts = {"1. 强行夺取，击杀同伴，解锁权限", "2. 放弃，回归人性"};
-			int subChoice = option("你的选择是？", opts);
-			if (subChoice == 1) {
-				print("你击杀了少年和少女，提取了他们的意识核心");
-				print("“很好！我将奖励你无尽的物资！”");
-				badEnd[19].func();
-				return;
-			} else {
-				print("你放弃了任务，向少年和少女坦白了管理员的阴谋");
-				print("“我们必须团结起来，打败邪恶的统治！”");
-				clue[13].func();
-				return;
-			}
-		} else {
-			print("少年/少女已不在你身边，任务无法完成");
-			print("“恭喜你，任务失败！”");
-			press();
 		}
-	} else if (choice == 2) {
-		print("你拒绝了管理员密令，扬声器中传出愤怒的电子音：");
-		print("“叛逆的实验体！将被强制抹除！”");
-		if (countUnlocked(clue) >= 16 && advanced) {
-			print("少年和少女突然出现：“我们早就知道管理员的阴谋！”");
-			print("三人合力摧毁了基地的管理员信号发射器，暂时摆脱了控制");
-			clue[16].func();
-			press();
-		} else {
-			print("管理员启动了基地的自毁程序，你在爆炸中身亡");
-			badEnd[27].func();
-			return;
-		}
-	} else {
-		print("你选择拖延任务，管理员给了你7天的期限");
-		print("7天内，你收集了更多线索，明白了管理员的真正目的：筛选“无情感的控制者”");
-		press();
-	}
-}
-void beginAdv() {
-	showStatus();
-	vector<string> opts = {"留在家中搜索物资", "前往邻居家探索"};
-	int choice = option("首次探索：", opts);
-	
-	if (choice == 1) {
-		print("在二楼，你在储物柜里发现了3份子弹");
-		print("你在家里过了一夜");
-		if (foodi(1)) {
-			badEnd[1].func();
-			return;
-		}
-		bullet += 3;
-	} else {
-		print("前往邻居家的路上，你遇到了2只丧尸");
-		if (loop >= 2) print("你想，你闭着眼也能命中——上一次，你因慌乱打空了1发子弹，这次不会了");
-		if (bulleti(2)) {
-			badEnd[11].func();
-			return;
-		}
-		print("你开枪打死了丧尸");
-		print("邻居家没人，你找到4份食物");
-		if (loop >= 2) {
-			print("客厅桌上有一份撕碎的实验报告：");
-			print(yellow + "0x**5*347*****3**：待****末**#05**准备**");
-		}
-		food += 4;
-		press();
-		print("你在邻居家过夜");
+		print("又过了一夜");
 		if (foodi(2)) {
-			badEnd[1].func();
+			badEnd[trans(BEi::Starve)].func();
 			return;
 		}
-	}
-	
-	showStatus();
-	opts = {"前往商场", "到处乱走", "留在屋子里等待救援"};
-	if (clue[3].unlocked) {
-		print(yellow + "[线索提示]：根据 “政府异象” 线索，救援队的到来遥遥无期，等待只会耗尽仅存的资源！");
-	}
-	choice = option("你想起附近有一座商场", opts);
-	if (choice == 3) {
-		print("你选择在家等待救援，要消耗6份食物");
-		if (foodi(6)) {
-			badEnd[1].func();
-			return;
-		}
-		if (loop >= 3 && death >= 30 && !zombieKing && countUnlocked(happyEnd) <= 1) {
-			happyEnd[10].func();
-			return;
-		}
-		if (random(1, 3) == 1) {
-			happyEnd[1].func();
-			return;
-		} else {
-			if (zombieKing) {
-				badEnd[13].func();
-			} else {
-				badEnd[3].func();
-			}
-			return;
-		}
-	} else if (choice == 2) {
-		if (loop >= 2) {
-			adminOrderAdv();
-			girlAdv();
-			return;
-		}
-		print("乱走时遇到了一只精英丧尸，需要3枪");
-		if (bulleti(3)) {
-			badEnd[20].func();
-			return;
-		}
-	} else {
-		print("前往商场途中遇到多只丧尸，需要2枪");
-		if (bulleti(2)) {
-			badEnd[18].func();
-			return;
-		}
-		print("你在商场找到3份食物和1发子弹");
-		food += 3;
-		bullet += 1;
-	}
-	girlAdv();
-}
+		showStatus();
+		print("前往幸存者基地的路上，你被大量丧尸逼进一家便利店");
+		print("便利店角落有一个燃气罐，你眼神一亮：“或许可以利用它”");
+		opts = {"1. 开枪引爆燃气罐，消耗1发子弹，有风险，清空丧尸", "2. 死守便利店，消耗5发子弹"};
+		choice = option("", opts);
 
-void initAdv() {
-	cls();
-	print("丧尸危机骤临之时，你正身处家中");
-	print("窗外的雨混杂着灰烬落下，曾经的都城如今是一座巨大的坟墓");
-	print("而这方小小居所，成了乱世中暂安的一隅");
-	int useNums = 10;
-	if (loop >= 2) {
-		print("只是这“暂安”，竟带着几分蚀骨的熟悉");
-		print("你有9点物资，分于子弹与食物");
-		print("请输入子弹数和食物数，两个数字间用空格或回车隔开", false);
-		if (!clue[0].unlocked) print("（总和为9）");
-		else print("");
-		useNums = 9;
-	} else {
-		print("你有10点物资，分于子弹与食物");
-		print("请输入子弹数和食物数，两个数字间用空格或回车隔开", false);
-		if (!clue[0].unlocked) print("（总和为10）");
-		else print("");
-	}
-	
-	int bulletInit, foodInit, cnt = 0;
-	while (true) {
-		cnt++;
-		cin >> bulletInit >> foodInit;
-		if (bulletInit + foodInit == useNums && bulletInit >= 0 && foodInit >= 0) {
-			bullet += bulletInit;
-			food += foodInit;
-			break;
+		if (choice == 1) {
+			if (bulleti(1)) {
+				badEnd[trans(BEi::PrematureShot)].func();
+				return;
+			}
+			print("你用一发子弹引爆了燃气罐");
+			if (random(1, 100) <= 12) {
+				print("燃气罐把你炸飞老远...");
+				badEnd[trans(BEi::DevKill)].func();
+				return;
+			}
+			print("燃气罐轰然爆炸，丧尸瞬间被烈焰吞噬！“快走！”");
+			if (girlLife) {
+				print("她在爆炸中护住了你，你只受了轻伤");
+				bullet += 1;
+			}
+		} else {
+			print("你选择死守商店，需要5枪");
+			if (bulleti(5)) {
+				if (girlLife) {
+					print("少女帮你突围，可惜子弹还是不够，最终失败了");
+					girlLife = false;
+				} else {
+					print("你准备突围，可惜子弹不够，最终失败了");
+				}
+				badEnd[trans(BEi::Swarm)].func();
+				return;
+			}
+			if (girlLife) {
+				print("少女在商店找到一把装满子弹的枪，子弹+8");
+				bullet += 8;
+				print("但少女被货架上的丧尸血划伤，选择了自杀");
+				girlLife = false;
+			}
 		}
-		if (clue[0].unlocked && bulletInit + foodInit <= 25) { // 秘籍
-			bullet += bulletInit;
-			food += foodInit;
-			break;
+		plot[trans(PLi::Base)].func();
+	});
+	plot[4] = Node("4-暂入基地", []() {
+		cls();
+		print("你终于到达幸存者基地");
+		print("坐在椅子上的是一个30岁左右的男性");
+		print("他说，欢迎");
+		print("你发现他胸前挂着工牌[ADMIN-02]");
+		print("首领上下打量你：“新来的？先熟悉一下基地吧”");
+
+		if (advanced) {
+			print("你一眼盯住他胸前的[ADMIN-02]，你以为是工牌，这次看清了：“人类监控”");
+			print("他的眼神带着机器的冰冷——他的瞳孔里，有数据流转的光点");
 		}
-		print("分配错误，请重新输入（总和必须为10）");
-		if (cnt >= 10) {
-			print("“烦死了！不想活就...”");
-			sleep(1200);
-			badEnd[7].func();
+		int choice;
+		vector<string> opts = {"1. 前往医疗室", "2. 前往指挥室", "3. 直接交换物资"};
+		if (loop >= 2) opts.push_back( "\n4. 调查首领的实验日志（需要管理员权限）" );
+
+		choice = option("基地内的行动：", opts);
+
+		if (choice == 1) {
+			print("医疗室里摆满了实验设备，墙上贴着一张病历：");
+			print(color::yellow + "***1号：***知，症**“延**异”，保*****记忆");
+		} else if (choice == 2) {
+			print("指挥室的电脑屏幕上显示着实验日志：");
+			print(color::yellow + "实****：**测**象，目**“突破**或**”");
+			if (countUnlocked(clue) <= 5) {
+				print("首领突然闯入：“你知道得太多了！”");
+				badEnd[trans(BEi::AdminExecute)].func();
+				return;
+			}
+		} else if (choice == 4) {
+			if (loop >= 2) {
+				print("电脑右下角弹出提示：地下室隐藏实验室已解锁");
+				vector<string> labOpts = {"1. 立即前往探索", "2. 稍后再去"};
+				int labChoice = option("是否立即探索隐藏实验室？", labOpts);
+				if (labChoice == 1) {
+					plot[trans(PLi::Lab)].func();
+					return;
+				}
+			}
+			print("请输入密码：实验观察者的编号");
+			int s = input(0, 999);
+			if (s != 2) {
+				badEnd[trans(BEi::FailedHack)].func();
+				return;
+			}
+			print("你循着线索敲开了首领的电脑密码，屏幕上跳出了完整的实验日志：");
+			print("1号少年：延迟变异，保留记忆；");
+			print("2号少女：免疫感染，重要测试；");
+			print("3号你：核心测试对象，目标突破循环。");
+		} else {
+			print("首领提出用子弹交换你的食物");
+			print("当前食物：" + to_string(food) + "，请输入要交换的数量（1-" + to_string(food) + "）");
+			int exchange = input(1, food);
+
+			food -= exchange;
+			bullet += exchange + 2;
+			print("交换完成，首领奖励你两发子弹");
+			print("当前子弹：" + to_string(bullet) + "，食物：" + to_string(food));
+		}
+
+		opts = {"1. 加入基地", "2. 准备离开"};
+		choice = option("基地首领希望你加入他们", opts);
+		if (choice == 1) {
+			if (girlLife && girlRelat >= 10) {
+				happyEnd[trans(HEi::Love)].func();
+				return;
+			} else {
+				happyEnd[trans(HEi::Hero)].func();
+				return;
+			}
+		} else {
+			opts = {"1. 现在离开", "2. 再停留一天"};
+			choice = option("你决定离开基地", opts);
+			if (choice == 2) {
+				print("再停留一天，可再次用食物换子弹");
+				print("当前食物：" + to_string(food) + "，请输入交换数量");
+				int exchange2 = input(1, food);
+				food -= exchange2;
+				bullet += exchange2 + 3;
+				print("交换完成！");
+				print("又过了一夜");
+				if (foodi(2)) {
+					badEnd[trans(BEi::Starve)].func();
+					return;
+				}
+			}
+			// 遇到少年，决定是否同行
+			showStatus();
+			opts = {"1. 带上他（每天多消耗1份食物）", "2. 不带他"};
+			choice = option("离开时，一个少年请求和你一起走", opts);
+			if (loop >= 2) {
+				print("他的眼神带着熟悉的痛苦——上一次你没带他，他偷走了你的枪；这次他先开口：");
+				print("“我是1号，每一次循环我都记得——你杀过我，救过我，抛弃过我……这次，能相信我一次吗？”");
+			}
+			if (choice == 2) {
+				print("少年生气离开，偷走了你的所有子弹");
+				boyRelat -= 3;
+				badEnd[trans(BEi::Despair)].func();
+				return;
+			} else {
+				// 进入少年结局线
+				haveBoy = true;
+				print("你带上了少年，他给了你2份食物");
+				food += 2;
+				press();
+				plot[trans(PLi::Boy)].func();
+			}
+		}
+	});
+	plot[5] = Node("5-少年同行", []() {
+		// 分配武器
+		vector<string> opts = {"1. 给他枪", "2. 给他水管", "3. 什么都不给"};
+		int choice = option("少年向你要武器", opts);
+		boyWeapon = choice; // 1=枪，2=水管，3=无
+
+		opts = {"1. 独自探索1楼", "2. 独自探索2楼", "3. 和少年一起探索2楼"};
+		choice = option("你们来到一家大商场：", opts);
+
+		if (choice == 1) {
+			cls();
+			print("你让少年在2楼等待，独自探索1楼");
+			print("1楼是日用品区，光线昏暗，隐约听到丧尸低吼");
+			print("突然冲出3只丧尸，需要3枪才能击退");
+			if (bulleti(3)) {
+				print("子弹不足！你被丧尸围攻...");
+				badEnd[trans(BEi::Swarm)].func();
+				return;
+			}
+			print("你成功击退丧尸，但枪声惊动了2楼的丧尸");
+			print("你急忙跑回2楼，发现少年已被丧尸包围...");
+			print("他为了不拖累你，拉着丧尸坠入了货梯井");
+			haveBoy = false;
+			print("你在少年的背包里找到一箱压缩饼干 食物+8");
+			food += 8;
+			// 食物和子弹充足
+			if (food > 10 && bullet > 10) trueEnd[trans(TEi::Normal)].func();
+			else {
+				print("你带着大量食物离开商场，但总觉得少了什么");
+				print("后续：你独自流浪，最终建立了新的幸存者营地");
+				badEnd[trans(BEi::LoneSurvivor)].func();
+				return;
+			}
+		} else if (choice == 2) {
+			cls();
+			print("你让少年在1楼看守物资，独自探索2楼");
+			print("2楼是服装区，挂满的衣物像人影一样晃动，十分怪异");
+
+			int intg = random(1, 3);
+			if (intg == 2) {
+				print("一只速度极快的精英丧尸扑了过来，需要5枪才能击杀");
+				if (zombieKing) {
+					print("精英丧尸停了下来，“你就是那位王者？久仰大名。”");
+					print("大王，我今天什么人也没有找到，我的部下都被杀死了...");
+					print("我作为精英，侥幸存活，");
+					print("我发现人类已经有组织的抵御我们了");
+					print("他们建立了中央政府，有了基地，牢不可破");
+					print("我们丧尸进化的速度远远更不上啊");
+					plot[trans(PLi::KingTalk)].func();
+					return;
+				}
+				if (bullet <= 3) {
+					print("你匆忙之下按下了扳机...");
+					badEnd[trans(BEi::PrematureShot)].func();
+					return;
+				}
+				if (bulleti(5)) {
+					print("精英丧尸撕碎了你的喉咙...");
+					badEnd[trans(BEi::EliteKill)].func();
+					return;
+				}
+				print("你艰难杀死精英丧尸，在它巢穴里找到8发子弹");
+				bullet += 8;
+			} else {
+				print("你在服装架后发现4只普通丧尸，消耗4枪击杀");
+				if (bulleti(4)) {
+					badEnd[trans(BEi::Swarm)].func();
+					return;
+				}
+				print("清理完丧尸后，找到6份军用罐头（食物+6）");
+				food += 6;
+			}
+
+			opts = {"1. 原谅他", "2. 教训他"};
+			int choice = option("你回到1楼，发现少年在偷偷吃你的食物", opts);
+
+			if (choice == 1) {
+				food -= 2;
+				if (boyRelat <= 0) {
+					print("少年眼神冰冷地说：“你和其他管理员一样，只把我当工具”");
+					print("他偷走食物，并留下一张纸条：“下次，我会杀了你”");
+					badEnd[trans(BEi::BoyBetrayal)].func();
+					return;
+				}
+				print("少年道歉，承诺以后会保护你");
+				print("你们离开商场，继续寻找安全区");
+				boyRelat += 2;
+				badEnd[trans(BEi::JourneyEnd)].func();
+				return;
+			} else {
+				print("你打了少年一巴掌，他眼神变得冰冷");
+				boyRelat -= 4;
+				badEnd[trans(BEi::BoyBetrayal)].func();
+				return;
+			}
+		} else {
+
+			cls();
+			string msg = "你和少年一起探索2楼，他拿着你给的武器（" +
+			string(boyWeapon == 1 ? "枪" : boyWeapon == 2 ? "水管" : "无") + "）";
+			print(msg);
+			print("2楼是家电区，货架倒塌堵住了部分通道，丧尸在里面游荡");
+
+			// 根据少年武器决定战斗难度
+			int zombieCount = (boyWeapon == 1) ? 2 : (boyWeapon == 2) ? 3 : 5;
+			print("遭遇" + to_string(zombieCount) + "只丧尸，你和少年背靠背战斗");
+
+			int bulletCost = (boyWeapon == 1) ? 1 : (boyWeapon == 2) ? 2 : 4;
+			if (bulleti(bulletCost)) {
+				print("子弹不足！少年为了保护你被丧尸咬伤...");
+			} else {
+				if (random(1, 4) == 2) {
+					print("战斗中少年被丧尸抓伤，伤口开始发黑...");
+				} else {
+					print("你们成功击退丧尸，在柜台后找到3份食物和8发子弹");
+					print("少年状态良好，你们准备离开商场");
+					badEnd[trans(BEi::FriendsBreak)].func();
+					return;
+				}
+			}
+			opts = {"1. 杀了他，获得物资，但良心不安", "2. 不杀他，带他找解药，食物消耗加倍"};
+			int choice = option(color::red + "少年体温升高，意识模糊，随时可能变异" + color::reset, opts);
+
+			if (choice == 1) {
+				print("你开枪打死了少年，从他身上找到20发子弹");
+				if (boyRelat <= 0) print("“你和丧尸一样，只把我当工具，下次，我会杀了你”");
+				boyRelat -= 8;
+				badEnd[trans(BEi::CrazyAndDie)].func();
+			} else {
+				boyRelat += 3;
+				print("你决定带他走，每天消耗2份额外食物");
+				if (foodi(4)) {
+					badEnd[trans(BEi::StarveWithBoy)].func();
+					return;
+				}
+				// 根据savedBoy触发不同剧情
+				if (boyRelat >= 6) {
+					print("少年突然抓住你的手，从口袋里掏出一张皱巴巴的纸：");
+					print("解药配方：需要商场3楼的抗生素和纯净水！");
+					opts = {"1. 相信他，去3楼找原料，额外消耗2枪，成功则两人都解除感染",
+					        "2. 不相信，继续带他找安全区"
+					       };
+					choice = option("是否去寻找解药？", opts);
+					if (choice == 1) {
+						if (bulleti(2)) {
+							badEnd[trans(BEi::Swarm)].func();
+							return;
+						}
+						print("你们在3楼找到抗生素，少年成功制作解药，两人终究解除了感染");
+						happyEnd[trans(HEi::Friend)].func();
+						return;
+					} else {
+						if (food >= 6) {
+							trueEnd[trans(TEi::SelfControl)].func();
+							return;
+						} else {
+							badEnd[trans(BEi::BoyZombie)].func();
+							return;
+						}
+					}
+				}
+			}
+		}
+		return;
+	});
+
+	plot[11] = Node("11-总管密令", []() {
+		cls();
+		print("【总管密令】总管理员向你发送专属任务");
+		print("任务目标：收集少年和少女的“意识核心”，换取“域管理员试用权限”");
+		vector<string> opts = {"1. 接受任务，背叛同伴", "2. 拒绝任务，对抗管理员", "3. 拖延任务，观望"};
+		int choice = option("是否接受管理员密令？", opts);
+
+		if (choice == 1) {
+			print("你接受了任务，开始寻找少年和少女的意识核心");
+			if (haveBoy && girlLife) {
+				print("少年和少女察觉到你的异常，提前躲藏起来");
+				print("你花费3份食物和5发子弹，最终找到了他们的藏身地");
+				opts = {"1. 强行夺取，击杀同伴，解锁权限", "2. 放弃，回归人性"};
+				int subChoice = option("你的选择是？", opts);
+				if (subChoice == 1) {
+					print("你击杀了少年和少女，提取了他们的意识核心");
+					print("“很好！我将奖励你无尽的物资！”");
+					badEnd[trans(BEi::LoneSurvivor)].func();
+					return;
+				} else {
+					print("你放弃了任务，向少年和少女坦白了管理员的阴谋");
+					print("“我们必须团结起来，打败邪恶的统治！”");
+					clue[trans(CLi::Awakening)].func();
+					return;
+				}
+			} else {
+				print("少年/少女已不在你身边，任务无法完成");
+				print("“恭喜你，任务失败！”");
+				press();
+			}
+		} else if (choice == 2) {
+			print("你拒绝了管理员密令，扬声器中传出愤怒的电子音：");
+			print("“叛逆的实验体！将被强制抹除！”");
+			if (countUnlocked(clue) >= 16 && advanced) {
+				print("少年和少女突然出现：“我们早就知道管理员的阴谋！”");
+				print("三人合力摧毁了基地的管理员信号发射器，暂时摆脱了控制");
+				clue[trans(CLi::Reunion)].func();
+				press();
+			} else {
+				print("管理员启动了基地的自毁程序，你在爆炸中身亡");
+				badEnd[trans(BEi::AdminExecute)].func();
+				return;
+			}
+		} else {
+			print("你选择拖延任务，管理员给了你7天的期限");
+			print("7天内，你收集了更多线索，明白了管理员的真正目的：筛选“无情感的控制者”");
+			press();
+		}
+	});
+	plot[12] = Node("12-试验场所", []() {
+		cls();
+		print("推开那扇刻着[ADMIN-04]的铅门，冷雾中悬浮着数十个培养舱。");
+		print("舱壁上结着冰霜，里面不是尸体，而是无数连接着光纤的大脑——这是管理员的一个服务器和研究基地。");
+		vector<string> opts = {"1. 强行破门，消耗3枪", "2. 寻找钥匙，消耗2份食物"};
+		int choice = option("是否探索隐藏实验室？", opts);
+
+		if (choice == 1) {
+			if (bulleti(3)) {
+				badEnd[trans(BEi::Swarm)].func();
+				return;
+			}
+			print("你用枪托砸开铁门，巨大的声响惊动了整栋建筑的丧尸");
+			print("实验室里堆满了实验器材，墙上的屏幕还在闪烁：");
+		} else {
+			if (foodi(2)) {
+				badEnd[trans(BEi::Starve)].func();
+				return;
+			}
+			print("你在首领办公室找到实验室钥匙，悄悄打开了门");
+			print("实验室里安静得可怕");
+		}
+		opts = {"1. 拷贝日志数据", "2. 销毁实验器材"};
+		choice = option("你的选择是？", opts);
+
+		if (choice == 1) {
+			print("你将日志数据拷贝到U盘，“实验体3号权限提升”");
+			if (random(1, 4) >= 2 || trueEnd[trans(TEi::Assimilation)].unlocked == 0) {
+				print(color::red + "非法拷贝核心数据，触发数据湮灭规则！");
+				badEnd[trans(BEi::Annihilation)].func();
+				return;
+			} else {
+				trueEnd[trans(TEi::Creator)].func();
+				return;
+			}
+		} else if (choice == 2) {
+			print("你砸毁了实验器材，扬声器中传出冰冷的电子音：");
+			print(color::red + "警告！破坏测试设施，销毁程序即将启动...");
+			if (!advanced) {
+				badEnd[trans(BEi::AdminExecute)].func();
+				return;
+			} else {
+				print("你的意志力抵抗了销毁程序，管理员暂时无法对你出手");
+				if (loop >= 3) {
+					print(color::bold + "但管理员在紧急之下启动了终极囚笼");
+					badEnd[trans(BEi::LoopPrison)].func();
+					return;
+				} else {
+					print("你才发现这里早已布满丧尸守卫，一路浴血搏杀，终于抵达核心区。");
+					print("诡异的是，跟来的丧尸皆被你屠戮殆尽，地下室里却空无一尸，只有一具身着白大褂的尸体，胸前编号[ADMIN-04]。");
+					print("你从尸体的衣袋中，找到了一本泛黄的实验笔记本。");
+					print("");
+					if (loop >= 3) {
+						print("实验体1号：变异进程加快，延迟发作，可保留部分原有记忆。");
+						print("今日，2号诞生：她比其余实验体，更具人类的极端机制。");
+						print("异常：机制的发育速度，远超预期阈值。");
+						print("2号免疫系统检测结果：含强感染性因子，可通过接触传播。");
+						print("实验体3号：核心测试对象，终极目标：被同化。");
+						print("实验遇瓶颈，需提取活体样本进行二次调试。");
+						print("[03]样本已失活性，但思维数据面板仍在波动。");
+					} else {
+						print("****1号****进展********记忆**");
+						print("今********，*号诞生了，她比其*****更*");
+						print("有些不对,*****的发育有些太快了");
+						print("2号的**被***出有强感染性");
+						print("3***能够*******无尽******同化");
+						print("实验***瓶颈，或许**该**活体样本****");
+						print("**,样本失去活性,但****动");
+					}
+					print("");
+					if (advanced) {
+						badEnd[trans(BEi::FamiliarTrap)].func();
+						return;
+					} else {
+						badEnd[trans(BEi::Note)].func();
+						return;
+					}
+				}
+			}
+		}
+		return;
+	});
+	plot[13] = Node("13-尸王谈判", []() {
+		cls();
+		print("一位身着白大褂的人突然出现，胸前编号[ADMIN-03]");
+		print("“实验体3号，尸化已成”");
+		vector<string> opts = {"1. 吞噬他获取记忆", "2. 与他谈判获取线索", "3. 无视他继续游荡"};
+		int choice = option("ADMIN-03试图与你沟通：", opts);
+
+		if (choice == 1) {
+			print("你猛地扑向管理员三号，他的记忆涌入你的脑海——");
+			print(color::yellow + "“1号已失控，2号情感过载，3号有意外...”");
+			print(color::yellow + "但你随之丧失的人性，让你彻底沦为没有意识的尸王。");
+			badEnd[trans(BEi::Mutate)].func();
+			return;
+		} else if (choice == 2) {
+			print("ADMIN-03抛出筹码：“告诉我你的线索数，我就给你实验核心数据”");
+			int inputC;
+			cin >> inputC;
+			if (inputC == countUnlocked(clue)) {
+				print("管理员三号冷笑：“看来你确实摸清了不少事”");
+				print("好吧，你作为尸王，你可以选择，结合人类还是结合丧尸。");
+				print("你可以多次去尝试，你会体会到他们的不同。");
+				press();
+			} else {
+				print("“说谎的代价，就是被抹杀”");
+				badEnd[trans(BEi::AdminExecute)].func();
+				press();
+				return;
+			}
+		}
+		print("你无视了管理员，带着丧尸群占领了整座城市。");
+		if (loop >= 2) {
+			print("数日后，你发现丧尸群出现了进化的迹象...");
+			plot[trans(PLi::KingEvolve)].func();
 			return;
 		}
-	}
-	press();
+		if (advanced) {
+			badEnd[trans(BEi::EmptyCityKing)].func();
+			return;
+		}
+		print("但你总觉得缺少了什么，仿佛被困在这座空城之中。");
+		badEnd[trans(BEi::LoneSurvivor)].func();
+		return;
+	});
+	plot[14] = Node("14-尸王进化", []() {
+		cls();
+		print(color::purple + "你站在城市最高的写字楼顶端，晚风裹挟着血腥味扑面而来。");
+		print("脚下是俯首帖耳的尸群，它们的意识如同微弱的光点，与你的精神相连。");
+		print("你能清晰地感受到——它们正在进化，从行尸走肉向拥有自我意识的个体转变。");
+		print("");
+		print("这是你的力量，也是你的诅咒。你可以引导它们的进化方向，决定这个世界的未来。");
+		vector<string> opts = {"1. 引导进化", "2. 抑制进化", "3. 维持现状"};
+		int choice = option("你将如何引导丧尸进化？", opts);
+
+		if (choice == 1) {
+			cls();
+			print("你闭上双眼，将尸王的威压扩散至整座城市。");
+			print("无形的能量如同潮水般席卷而过，尸群发出兴奋的嘶吼。");
+			print("它们开始疯狂吞噬人类残留的意识碎片，身体发生着剧烈的畸变。");
+			sleep(500);
+			print("");
+			print("三天后，第一只高阶丧尸诞生了。");
+			print("它有着接近人类的外形，皮肤呈现出金属般的光泽，眼中闪烁着智慧的光芒。");
+			print("它单膝跪地，向你低下头颅：“吾王，我是第一个觉醒者，愿为您效命。”");
+			print("你接纳了它，将一半的尸群指挥权交给了它。");
+			print("在它的带领下，丧尸群形成了严密的战术体系，人类基地的防线不堪一击。");
+			print("一周之内，三座人类大型基地被攻破，幸存者数量锐减九成。");
+			print("当最后一座基地的旗帜倒下时，你站在废墟之上，成为了真正的末世帝王。");
+			if (advanced) {
+				print("然而，胜利的喜悦并未持续太久。");
+				print("你发现高阶丧尸们开始有了自己的想法，它们不再满足于单纯的杀戮。");
+				print("它们要求建立自己的秩序，要求与你平起平坐。");
+				print("");
+				print("“君王，我们已经不再是野兽了。”你的副手说道，“我们需要尊重，需要生存的空间。”");
+
+				vector<string> kingOpts = {
+					"1. 镇压叛乱：用绝对的力量摧毁所有反抗者",
+					"2. 妥协共存：与高阶丧尸划分势力范围"
+				};
+				int kingChoice = option("你将如何应对这场来自内部的危机？", kingOpts);
+
+				if (kingChoice == 1) {
+					print("你毫不犹豫地发动了攻击，将所有质疑你的高阶丧尸全部抹杀。");
+					print("叛乱被平息了，但你也成了真正的孤家寡人。");
+					print("尸群再次变成了没有意识的行尸走肉，整座城市只剩下你一个思想者。");
+					badEnd[trans(BEi::EmptyCityKing)].func();
+					return;
+				} else {
+					print("你选择了妥协，与高阶丧尸们划分了各自的势力范围。");
+					print("丧尸们占据了城市的西部，人类幸存者则退守东部的堡垒。");
+					print("世界形成了一种诡异的平衡，没有大规模战争，只有无休止的小规模冲突。");
+					print("你成了这个破碎世界的平衡者，既不属于人类，也不属于丧尸。");
+					happyEnd[trans(HEi::Balance)].func();
+					return;
+				}
+			} else {
+				badEnd[trans(BEi::KingDownfall)].func();
+				return;
+			}
+		} else if (choice == 2) {
+			cls();
+			print("你收回了尸王的威压，用自己的力量压制着尸群的进化本能。");
+			print("丧尸们发出痛苦的嘶吼，它们的身体在进化与退化之间反复拉扯。");
+			print("你能感受到它们的痛苦，就像你自己的痛苦一样。");
+			sleep(500);
+			print("");
+			print("一周后，尸群的进化被彻底抑制，它们变回了只会本能杀戮的野兽。");
+			print("但你也因此元气大伤，力量下降了三成，再也无法轻易控制所有尸群。");
+			if (girlRelat >= 10) {
+				print("人类代表与你谈判：“我们可以共存，只要你努力控制丧尸”");
+				happyEnd[trans(HEi::Alliance)].func();
+				return;
+			} else {
+				print("丧尸不信任你，人类也不信任你，向你发射了燃烧弹，你虽躲过，但身体重伤");
+				print("“既然无法和解，那就彻底毁灭吧！”");
+				badEnd[trans(BEi::Mutate)].func();
+				return;
+			}
+		} else {
+			cls();
+			print("你选择了顺其自然，既不引导也不抑制，让进化自行发展。");
+			print("你离开了尸群，独自一人在城市中流浪。");
+			print("你不再关心人类的死活，也不再关心丧尸的进化，你只想做你自己。");
+			sleep(800);
+			print("");
+			print("时间一天天过去，城市里发生了翻天覆地的变化。");
+			print("一部分丧尸进化成了高阶丧尸，建立了自己的部落；");
+			print("另一部分丧尸则保持着原始的兽性，在城市里游荡；");
+			print("人类幸存者则在夹缝中求生，建立了一个个小型的聚居点。");
+			print("你厌倦了这种无尽的对峙，选择换一种方式——保持和平");
+			happyEnd[trans(HEi::Peacekeeper)].func();
+			return;
+		}
+	});
 }
 
 int main() {
@@ -2333,6 +2435,7 @@ int main() {
 	BadEnd();
 	HappyEnd();
 	TrueEnd();
+	Plot();
 	loadGame();
 	vector<string>mainPic = {
 		"残残残残 残  残    途     途      ",
@@ -2340,17 +2443,17 @@ int main() {
 		" 残  残  残      途途 途途途途途  ",
 		"残 残残 残残残残   途     途      ",
 		"    残    残 残    途 途途途途途   ",
-		"  残      残残     途  途 途 途   " + gray + " v" + to_string(VERSION),
-		" 残     残   残  途 途途途途途途途" + gray + " By H20"
+		"  残      残残     途  途 途 途   " + color::gray + " v" + to_string(VERSION),
+		" 残     残   残  途 途途途途途途途" + color::gray + " By H20"
 	};
 	for (string s : mainPic) {
-		cout << red + s << endl;
+		cout << color::red + s << endl;
 		sleep(120);
 	}
-	cout << reset;
+	cout << color::reset;
 	if (loop == 1) print("新手提示：按上下方向键切换选项，Enter键或数字键选择选项");
 	press();
-	if (loop >= 5 && !trueEnd[8].unlocked) trueEnd[8].func();
+	if (loop >= 5 && !trueEnd[trans(TEi::Illusion)].unlocked) trueEnd[8].func();
 	// 游戏启动
 	while (true) {
 		cls();
@@ -2370,14 +2473,14 @@ int main() {
 					};
 					int startChoice = option("===== 开始游戏 =====", startOpts, false);
 					if (startChoice == 2) {
-						initAdv();
-						baseAdv();
+						plot[trans(PLi::Start)].func();
+						plot[trans(PLi::Base)].func();
 						saveGame();
 						break;
 					}
 				}
-				initAdv();
-				beginAdv();
+				plot[trans(PLi::Start)].func();
+				plot[trans(PLi::Explore)].func();
 				saveGame();
 				break;
 			}
@@ -2390,8 +2493,8 @@ int main() {
 					print("开发人员竟如此疏忽？");
 					print("下次相见，定要与他理论一番！");
 					press();
-					badEnd[7].func();
-					if (loop >= 2) trueEnd[8].func();
+					badEnd[trans(BEi::DevKill)].func();
+					if (loop >= 4 && death >= 41) trueEnd[trans(TEi::Illusion)].func();
 				}
 				saveGame();
 				break;
@@ -2399,41 +2502,41 @@ int main() {
 			case 3: {
 				cls();
 				print("===== 终局大典 =====");
-				showEnd(badEnd, red, "终局·憾恨");
+				showEnd(badEnd, color::red, "终局·憾恨");
 				press();
-				showEnd(happyEnd, green, "终局·幸悦");
-				showEnd(trueEnd, yellow, "终局·真章");
+				showEnd(happyEnd, color::green, "终局·幸悦");
+				showEnd(trueEnd, color::yellow, "终局·真章");
 				press();
-				showEnd(clue, sky, "线索·星光");
+				showEnd(clue, color::sky, "线索·星光");
 				showAdv();
 				if (countUnlocked(clue) >= 4 + ceil(2.5 * loop) && advanced) trueEnd[4].func();
 				if (loop == 1 && !gameClear) {
 					print("任务：解锁两个好结局+七个坏结局+两条线索通关基础剧情");
 				}
 				if (countUnlocked(happyEnd) >= 2 && countUnlocked(badEnd) >= 7
-					&& countUnlocked(clue) >= 2 && !gameClear && loop == 1) {
-					print(green + "===== 基础剧情通关 · 破局之始 =====");
+				&& countUnlocked(clue) >= 2 && !gameClear && loop == 1) {
+					print(color::green + "===== 基础剧情通关 · 破局之始 =====");
 					print("解锁新功能：快进文本 在逐字输出时按F键可加快速度");
 					print("目标：解锁" + to_string(2 + floor(2.5 * loop)) + "条线索进入进阶剧情");
 					gameClear = true;
 				}
 				if (countUnlocked(clue) >= 2 + floor(2.5 * loop) && !advanced) {
-					print(yellow + "===== 进阶剧情通关 · 真貌初显 =====");
+					print(color::yellow + "===== 进阶剧情通关 · 真貌初显 =====");
 					print("解锁新功能：剧情快进 进入游戏后可直接进入基地阶段");
 					print("挑战：解锁" + to_string(4 + ceil(2.5 * loop)) + "条线索有机会达到下一阶段");
 					gameClear = true;
 					advanced = true;
 				}
 				if (death >= 30 && !zombieKing) {
-					print(red + "触发[尸王线]");
+					print(color::red + "触发[尸王线]");
 					print("为何我会死亡这么多次？");
-					print(bold + "这世界，没有生路，藏着太多诡异。");
-					print(red + "“生而彷徨，不如就此毁灭？”");
+					print(color::bold + "这世界，没有生路，藏着太多诡异。");
+					print(color::red + "“生而彷徨，不如就此毁灭？”");
 					zombieKing = true;
-					if (!gameClear) badEnd[6].func();
+					if (!gameClear) badEnd[trans(BEi::Mutate)].func();
 					print("你化作了尸王，脑海中却不断闪过三十次死亡的记忆碎片……");
 					print("你终于醒悟：这只是一场被操控的游戏。");
-					clue[7].func();
+					clue[trans(CLi::Death)].func();
 				}
 				press();
 				saveGame();
@@ -2441,32 +2544,32 @@ int main() {
 			}
 			case 4: {
 				cls();
-				print(yellow + "===== 迷途提示 =====");
-				print(bold + "【基础操作】" + reset);
+				print(color::yellow + "===== 迷途提示 =====");
+				print(color::bold + "【基础操作】" + color::reset);
 				print("方向键/数字键选选项 | Enter确认");
 				print("任意键：继续剧情");
 				print("");
-				print(bold + "【资源生存】" + reset);
+				print(color::bold + "【资源生存】" + color::reset);
 				print("子弹：战斗破障 | 食物：每日消耗");
 				print("食物=0 饿死 | 子弹不足被丧尸击杀");
 				print("子弹可能打偏 | 注意额外准备");
 				print("");
-				print(bold + "【人物关系】" + reset);
+				print(color::bold + "【人物关系】" + color::reset);
 				print("少女：关系值影响进程 | 少年：信任值定阵营");
 				print("支持人类阵营 | 挑战管理员 | 加入丧尸军团");
 				print("善待同伴：解锁友好/真结局");
 				print("");
-				print(bold + "【结局解锁】" + reset);
+				print(color::bold + "【结局解锁】" + color::reset);
 				print("坏结局：30种 | 好结局：10种 | 真结局：8种");
 				print("");
-				print(sky + "祝你在末世中，找到属于自己的终局。" + reset);
+				print(color::sky + "祝你在末世中，找到属于自己的终局。" + color::reset);
 				press();
 				if (loop == 1 && death >= 41 && exitTry >= 41) {
-					trueEnd[9].func();
+					trueEnd[trans(TEi::Instant)].func();
 					return 0;
 				}
 				if (loop == 4 && death >= 87) {
-					trueEnd[10].func();
+					trueEnd[trans(TEi::Chaos)].func();
 					return 0;
 				}
 				break;
@@ -2474,9 +2577,9 @@ int main() {
 			case 5: {
 				cls();
 				print("“感谢游玩！”");
-				if (exitTry >= 30 && zombieKing)trueEnd[3].func();
-				if (loop >= 2) badEnd[16].func();
-				else badEnd[14].func();
+				if (exitTry >= 30 && zombieKing)trueEnd[trans(TEi::Experiment)].func();
+				if (loop >= 2) badEnd[trans(BEi::BugCrash)].func();
+				else badEnd[trans(BEi::ExitDeath)].func();
 				exitTry++;
 				saveGame();
 				break;
