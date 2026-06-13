@@ -16,15 +16,15 @@
 ## 操作说明
 - ↑ ↓ 方向键：切换选项
 - 回车键 / 数字键：确认选择
-- F 键：快进文本
+- F 键：快进文本 只在通关基础剧情后生效
 
 ## 运行方式
-- 仅支持 Windows 10+ 系统
-- Windows 11 + Windows Terminal 以获得最佳体验
+- 支持 Windows 10+ 系统
+- Windows 11 + Terminal 以获得最佳体验
 - 直接打开 / 编译 RuinedPath.exe 即可
+- g++.exe RuinedPath.cpp -std=c++14 -Os -s -o RuinedPath.exe
 
 <img width="1485" height="760" alt="屏幕截图 2026-06-13 182543" src="https://github.com/user-attachments/assets/460b9a18-f1ff-418f-9eb3-7cb04193fc86" />
 <img width="1491" height="766" alt="屏幕截图 2026-06-13 184720" src="https://github.com/user-attachments/assets/373af187-7220-4cb7-92e9-12d6243625ba" />
 <img width="1479" height="766" alt="屏幕截图 2026-06-13 184944" src="https://github.com/user-attachments/assets/23df52a0-2cb6-4134-89eb-9f439da53bf8" />
 <img width="1484" height="766" alt="屏幕截图 2026-06-13 185159" src="https://github.com/user-attachments/assets/49902fd9-3820-4662-b240-65b37b5b74d8" />
-<img width="1480" height="786" alt="屏幕截图 2026-06-13 184434" src="https://github.com/user-attachments/assets/7df81d46-45f2-4953-9fb0-76faa49a726c" />
