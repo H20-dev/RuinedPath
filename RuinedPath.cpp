@@ -52,14 +52,6 @@ public:
 	function<void()> func;
 	Node() {}
 	Node(string s2, function<void()> F) : name(s2), func(F) {}
-	// 序列化（只存需要的数据）
-	void serialize(ofstream& f) const {
-		f.write((const char*)&unlocked, sizeof(unlocked));
-	}
-	// 反序列化（读回数据）
-	void deserialize(ifstream& f) {
-		f.read((char*)&unlocked, sizeof(unlocked));
-	}
 };
 const int BAD_END_NUM = 30;
 const int HAPPY_END_NUM = 10;
@@ -234,7 +226,7 @@ inline void print(const string& text, bool enter = true) {
 	}
 	cout << color::reset; // 还原颜色
 	if (enter) cout << endl; // 控制换行
-	sleep(60 - speed * 40); // 快进
+	sleep(50 - speed * 35); // 快进
 }
 // 数字输入
 inline int input(int mi, int ma) {
@@ -392,9 +384,9 @@ void resetGameLoop() {
 	loop ++;
 	gameClear = true;
 	advanced = false;
-	death /= 2;
-	girlRelat = 3 + girlRelat * 0.5;
-	boyRelat = 3 + boyRelat * 0.5;
+	death = int(death / 1.5);
+	girlRelat = 3 + girlRelat * 0.7;
+	boyRelat = 3 + boyRelat * 0.7;
 	zombieKing = false;
 }
 
@@ -413,7 +405,7 @@ void showEnd(vector<Node> arr, string clr, string title) {
 		if (arr[i].unlocked) {
 			print( clr + "[" + numChinese(i) + "] 已解锁 " + arr[i].name );
 		} else {
-			print( color::gray + "[" + numChinese(i) + "] 未解锁 " + "？？？？");
+			print( color::gray + "[" + numChinese(i) + "] 未解锁 ");
 		}
 	}
 }
@@ -881,9 +873,8 @@ void fakeBug(int bugType = random(1, 40 - loop * 3)) {
 			clear();
 			break;
 		case 4: // 文字重复输出
-			print(color::red + "你你你你选选选选择择择择错错错错误误误误", false);
+			print(color::red + "你你你你选选选选择择择择错错错错误误误误");
 			sleep(600 * loop);
-			cout << color::reset << "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"; // 回退删除乱码
 			break;
 		case 6: // 假的存档损坏提示
 			print(color::yellow + "[警告] 存档文件 CRC 校验失败 (0xC000" + to_string(random(10000, 99999)) + ")");
@@ -1578,12 +1569,12 @@ void initTrueEnd() {
 		print("“归途中，你遇一位女幸存者，向你讨要物资。”");
 		print("“你终至幸存者基地，首领提出以子弹交换你的食物。”");
 		print("“离去时，一位少年请求与你同行。”");
-		press();
+		print("");
 		print("天地间忽然异变，所有的活人在一瞬之间消失无踪，丧尸也尽数倒地，失去了生机。");
 		print("你的眼前，只剩下无边的黑暗，仿佛坠入了虚无之境。");
 		print("不知过了多久，你感受到了死亡的降临，却又觉异样——这感觉，与往日死去时如出一辙。");
 		print("“不，还未结束……”");
-		press();
+		print("");
 		print("你猛然惊醒——眼前并非熟悉的家，而是一间布满仪器的实验室。");
 		print("手腕上的手环闪烁着警示红光：实验体3号意识异常……测试场景重建中……");
 		print("一位身着白大褂的男子走入实验室，看向你，语气冰冷：“你居然发现了这个秘密。”");
@@ -1629,7 +1620,7 @@ void initTrueEnd() {
 		print("总管理员露出诡异的笑容：“很好，你通过了终极测试——放弃自由，拥抱控制。”");
 		print("他抬手按下控制台的按钮，你的手腕传来剧痛，原有的 3号 标记渐渐消失，取而代之的是 ADMIN-00 。");
 		sleep(500);
-		print("“=== 管理员日志·最终卷 ===”");
+		print("“===== 管理员日志·最终卷 =====”");
 		print("实验体3号成功同化，成为新任域管理员ADMIN-00。");
 		print("同化核心规则：保留记忆，抹除情感，仅存理性。");
 		sleep(800);
@@ -1854,7 +1845,8 @@ void initTrueEnd() {
 		print("你感觉到一阵剧烈的头痛，仿佛有无数根针在刺入你的大脑。你看到实验室的墙壁像蜡一样融化，露出了背后漆黑的虚空。");
 		print("那些身穿白大褂的管理员，他们的衣物开始剥落，露出了底下闪烁的电路板。他们尖叫着，试图拔掉网线，但他们的身体已经变成了数据流的一部分。");
 		print("“你疯了！你把‘它’放出来了！” ");
-		print("");
+		press();
+		
 		print("虚拟与现实的屏障碎裂了。");
 		print("你看到你的电脑屏幕裂开，一只苍白的手从屏幕里伸了出来，抓住了你的键盘。");
 		print("这不是游戏画面，这是你的现实。");
@@ -1884,6 +1876,12 @@ void initTrueEnd() {
 		print("你解放了所有实验体，也将整个宇宙拖入了无尽的轮回。”");
 		print("“欢迎来到——新残途。”");
 		print("“恭喜你，你通关了游戏。但是，你真的能关掉电脑吗？”");
+		time_t now_c = time(nullptr);
+		tm* local_tm = localtime(&now_c);
+		char timeBuffer[100];
+		strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", local_tm);
+		string timeStr = string(timeBuffer);
+		print("——" + timeStr);
 		FileOperation::saveGame();
 		press();
 		exit(0);
