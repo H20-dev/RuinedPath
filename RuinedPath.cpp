@@ -1,5 +1,18 @@
-// 推荐编译 GCC -std=c++14 -Os -s
-#include <bits/stdc++.h>
+//-std=c++14 -Os -s
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <functional>
+#include <random>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <ctime>
+#include <cstdlib>
+#include <cstdint>
+#include <algorithm>
+#include <type_traits>
 #include <windows.h>
 #include <conio.h>
 using namespace std;
@@ -21,6 +34,7 @@ bool speed = false;// 快进控制
 const string SAVE_FILE = "save.ans";// 存档变量
 const string TMP_SAVE_FILE = "save.tmp.ans";// 临时存档
 const int VERSION = 2607;           // 版本号
+const string TITLE = "RuinedPath";
 
 // 资源变量
 int bullet;// 子弹数量
@@ -66,7 +80,7 @@ enum class PlotIndex {
 	Boy,           // 少年同行
 
 	AdminOrder = 11, // 总管密令
-	Lab = 12,        // 试验场所
+	Lab = 12,        // 试验密室
 	KingTalk = 13,   // 尸王谈判
 	KingEvolve = 14, // 尸王进化
 };
@@ -94,16 +108,16 @@ enum class BadEndIndex {
 	LoneSurvivor,  // 孤存终亡
 	EliteKill,     // 精英丧噬
 
-	JourneyEnd,       // 途竭而终
-	BoyBetrayal,      // 少叛遭祸
-	FriendsBreak,     // 安离反目
-	CrazyAndDie,      // 成魔叛己
-	StarveWithBoy,    // 携少饥终
-	BoyZombie,        // 异少噬身
-	AdminExecute,     // 首领灭知
-	EmptyCityKing,    // 空城孤王
-	LoopPrison,       // 循环囚笼
-	Annihilation, // 数据湮灭
+	JourneyEnd,    // 途竭而终
+	BoyBetrayal,   // 少叛遭祸
+	FriendsBreak,  // 安离反目
+	CrazyAndDie,   // 成魔叛己
+	StarveWithBoy, // 携少饥终
+	BoyZombie,     // 异少噬身
+	AdminExecute,  // 首领灭知
+	LoneLeader,    // 空城孤王
+	LoopPrison,    // 循环囚笼
+	Annihilation,  // 数据湮灭
 };
 enum class HappyEndIndex {
 	Dawn = 1,    // 终睹晨曦
@@ -132,16 +146,16 @@ enum class TrueEndIndex {
 enum class ClueIndex {
 	Unused = 0,       // 0号未使用
 
-	BoyDelayed = 1,   // 1-迟变少年
-	ExperimentEndless,// 2-实验无尽
-	Anomaly,          // 3-域中异象
-	GirlEarly,        // 4-早变异女
-	ExperimentDual,   // 5-实验双体
-	BreakExit,        // 6-破局而退
-	Death,            // 7-死亡迷局
-	Loop,             // 8-复活循环
-	Origin,           // 9-变异溯源
-	Key,              // 10-记忆之键
+	BoyDelayed = 1,// 1-迟变少年
+	Endless,       // 2-实验无尽
+	Anomaly,       // 3-域中异象
+	GirlMutate,    // 4-早变异女
+	Experimenter,  // 5-实验双体
+	BreakExit,     // 6-破局而退
+	Death,         // 7-死亡迷局
+	Loop,          // 8-复活循环
+	Origin,        // 9-变异溯源
+	Key,           // 10-记忆之键
 
 	Outside,     // 11-域外之界
 	Survival,    // 12-生存本能
@@ -771,6 +785,7 @@ namespace FileOperation {
 				sleep(1000);
 				print(color::purple + "“试图修改命运的轨迹吗？凡人。”");
 				print(color::blue + "“绝不可能！绝不可能！！”");
+				badEnd[trans(BadEndIndex::Annihilation)].func();
 				if (FileOperation::FileExists(TMP_SAVE_FILE.c_str())) {
 					FileOperation::FileDelete(TMP_SAVE_FILE.c_str());
 				}
@@ -987,7 +1002,7 @@ void initBadEnd() {
 		print("你失去意识前的最后一幕，是少女俯身，咬向你脖颈的模样。");
 		if (gameClear)	print("“这不是应该有的结局……”");
 		BE(8);
-		clue[trans(CLi::GirlEarly)].func();
+		clue[trans(CLi::GirlMutate)].func();
 		press();
 	});
 	badEnd[9] = Node("9-阅记遭噬", [&BE]() {
@@ -995,7 +1010,7 @@ void initBadEnd() {
 		print("正当你沉浸在笔记的内容中时，脖颈处骤然传来剧痛——被人狠狠咬住。");
 		print("临死前，你隐约听到少年的声音，轻得如同叹息：“再来一次吧。”");
 		BE(9);
-		clue[trans(CLi::ExperimentDual)].func();
+		clue[trans(CLi::Experimenter)].func();
 		press();
 	});
 	badEnd[10] = Node("10-麻木度世", [&BE]() {
@@ -1185,20 +1200,16 @@ void initBadEnd() {
 			print("最终，你被困在无尽的周目循环中，成为了实验的“永久样本”。");
 		}
 		BE(29);
-		FileOperation::saveGame();
-		exit(0);
+		press();
 	});
 	badEnd[30] = Node("30-数据湮灭", [&BE]() {
 		press();
-		if (loop >= 3) {
-			print("你在三周目试图修改实验核心数据，却触发了管理员的“数据湮灭”协议。");
-			print("眼前的世界开始像素化崩溃——丧尸化作乱码，少年/少女的轮廓逐渐消失，连你自己的躯体也开始透明。");
-			print("“违规修改核心数据，实验体3号数据将被永久清除”——总管理员");
-			print("你的意识最终消散在乱码之中，连循环的资格都被剥夺。");
-		}
+		print("你试图修改实验核心数据，却触发了管理员的“数据湮灭”协议。");
+		print("眼前的世界开始像素化崩溃——丧尸化作乱码，少年/少女的轮廓逐渐消失，连你自己的躯体也开始透明。");
+		print("“违规修改核心数据，实验体3号数据将被永久清除”");
+		print("你的意识最终消散在乱码之中，连循环的资格都被剥夺。");
 		BE(30);
-		FileOperation::saveGame();
-		exit(0);
+		press();
 	});
 }
 void initHappyEnd() {
@@ -1459,7 +1470,7 @@ void initTrueEnd() {
 	trueEnd[3] = Node("3-实验之相", [&TE]() {
 		print("既然你有如此的毅力与实力，我还是告诉你真相吧。——管理员");
 		TE(3);
-		clue[trans(CLi::ExperimentEndless)].func();
+		clue[trans(CLi::Endless)].func();
 		sleep(1000);
 		print("===== 管理员日志 =====");
 		print("[LOG] 实验体3号：死亡循环，退出尝试，意志力达标");
@@ -2473,7 +2484,7 @@ void initPlot() {
 			press();
 		}
 	});
-	plot[12] = Node("12-试验场所", []() {
+	plot[12] = Node("12-试验密室", []() {
 		clear();
 		print("推开那扇刻着[ADMIN-04]的铅门，冷雾中悬浮着数十个培养舱。");
 		print("舱壁上结着冰霜，里面不是尸体，而是无数连接着光纤的大脑——这是管理员的一个服务器和研究基地。");
@@ -2569,10 +2580,10 @@ void initPlot() {
 			badEnd[trans(BEi::Mutate)].func();
 			return;
 		} else if (choice == 2) {
-			print("ADMIN-03抛出筹码：“告诉我你的线索数，我就给你实验核心数据”");
+			print("ADMIN-03抛出筹码：“告诉我你的死亡数除以十的余数，我就给你实验核心数据”");
 			int inputC;
-			cin >> inputC;
-			if (inputC == countUnlocked(clue)) {
+			inputC = input(0, 10);
+			if (inputC == death) {
 				print("管理员三号冷笑：“看来你确实摸清了不少事”");
 				print("好吧，你作为尸王，你可以选择，结合人类还是结合丧尸。");
 				print("你可以多次去尝试，你会体会到他们的不同。");
@@ -2591,7 +2602,7 @@ void initPlot() {
 			return;
 		}
 		if (advanced) {
-			badEnd[trans(BEi::EmptyCityKing)].func();
+			badEnd[trans(BEi::LoneLeader)].func();
 			return;
 		}
 		print("但你总觉得缺少了什么，仿佛被困在这座空城之中。");
@@ -2639,7 +2650,7 @@ void initPlot() {
 					print("你毫不犹豫地发动了攻击，将所有质疑你的高阶丧尸全部抹杀。");
 					print("叛乱被平息了，但你也成了真正的孤家寡人。");
 					print("尸群再次变成了没有意识的行尸走肉，整座城市只剩下你一个思想者。");
-					badEnd[trans(BEi::EmptyCityKing)].func();
+					badEnd[trans(BEi::LoneLeader)].func();
 					return;
 				} else {
 					print("你选择了妥协，与高阶丧尸们划分了各自的势力范围。");
@@ -2698,6 +2709,7 @@ int main() {
 	GetConsoleCursorInfo(hConsole, &cursorInfo);
 	cursorInfo.bVisible = false;
 	SetConsoleCursorInfo(hConsole, &cursorInfo);
+	SetConsoleTitle(TITLE.c_str());
 #endif
 	clear();
 	initClue();
