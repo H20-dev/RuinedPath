@@ -36,8 +36,7 @@ const string SAVE_FILE = "save.ans";// 存档变量
 const string TMP_SAVE_FILE = "save.tmp.ans";// 临时存档
 const int COMPAT_VERSION = 10500;  // 存档兼容版本号
 const int VERSION = 10501;  // 版本号
-const string TITLE = "RuinedPath";
-const WCHAR* TITLE_W = L"RuinedPath";
+const string TITLE = "残途";  // 标题
 
 // 局内资源变量
 int bullet;// 子弹数量
@@ -66,15 +65,15 @@ vector<Node> plot(PLOT_NUM + 1);    // 剧情
 enum class PlotIdx {
 	Start = 1,     // 分配物资
 	Explore,       // 初始探索
-	Girl,          // 初遇少女
-	Base,          // 暂入基地
+	Girl,          // 初逢少女
+	Base,          // 暂留基地
 	Boy,           // 少年同行
 
 	AdminOrder = 11, // 总管密令
 	Lab = 12,        // 试验密室
 	KingTalk = 13,   // 尸王谈判
 	KingEvolve = 14, // 尸王进化
-	AdminChoice = 15,// 总管抉择
+	AdminChoice = 15,// 新管抉择
 };
 
 enum class BadEndIdx {
@@ -179,7 +178,12 @@ inline static void sleep(int ms) {
 }
 // 按下按键判断 无返回值getch()
 inline static void buttonHit() {
+	while (_kbhit()) { (void)_getch(); }
 	_getch();
+}
+inline static char buttonChar() {
+	while (_kbhit()) { (void)_getch(); }
+	return _getch();
 }
 // 打印文字
 inline static void print(const string& text, bool enter = true) {
@@ -316,7 +320,7 @@ inline static int option(const string title, const vector<string>& options, bool
 }
 
 // 显示当前状态（子弹+食物）
-inline static void showStatus() {
+static void showStatus() {
 	clear();
 	print("【当前状态】");
 	string bulletBar;
@@ -886,23 +890,74 @@ void static fakeBug(int bugType = random(1, min(12, 40 - loop * 3))) {
 	sleep(speed * 20);
 	clear();
 }
+// std::string(ANSI) → std::wstring 转换
+static std::wstring toWString(const string& str)
+{
+	if (str.empty()) return L"";
+
+	// 第一步：计算需要的宽字符缓冲区长度
+	int wcharCount = MultiByteToWideChar(
+		CP_ACP,        // 使用系统默认ANSI代码页(GBK简体中文)
+		0,
+		str.c_str(),
+		static_cast<int>(str.size()),
+		nullptr, 0
+	);
+
+	if (wcharCount <= 0) return L"";
+
+	// 第二步：分配wchar缓冲区并转换
+	std::vector<WCHAR> wBuf(wcharCount);
+	MultiByteToWideChar(
+		CP_ACP,
+		0,
+		str.c_str(),
+		static_cast<int>(str.size()),
+		wBuf.data(),
+		wcharCount
+	);
+
+	return std::wstring(wBuf.data(), wcharCount);
+}
+
+// 标题构建
+class TitleGuard {
+public:
+	// 构造函数：切换到 RuinedPath+剧情名
+	TitleGuard(const string& plotName) {
+		// 拼接新标题：RuinedPath+剧情名
+		string newTitleStr;
+		if (plotName == "") newTitleStr = TITLE;
+		else newTitleStr = TITLE + "-" + plotName;
+		std::wstring newTitle = toWString(newTitleStr);
+
+		// 设置新控制台标题
+		SetConsoleTitleW(newTitle.c_str());
+	}
+	// 析构函数：自动还原原始标题（离开剧情时触发）
+	~TitleGuard() {
+		SetConsoleTitleW(toWString(TITLE).c_str());
+	}
+};
 // 结局函数
 void static initBadEnd() {
 	auto BE = [](int n) {
-		print(color::red + "【终局·憾恨】第" + numChinese(n) + "幕");
-		print(color::red + badEnd[n].name);
+		print(color::red + "【终局·憾恨】第" + numChinese(n) + "幕 " + badEnd[n].name);
 		badEnd[n].unlocked = 1;
 		death++;
 		};
-	badEnd[1] = Node("1-饥馑殒命", [&BE]() {
+	badEnd[1] = Node("饥馑殒命", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[1].name);
+		BE(1);
 		print("粮囊已空，你静坐于破败的角落，身躯因饥饿日渐消瘦。");
 		print("指尖划过干裂的唇，连呼喊的力气也已耗尽，在寂静中咽下了最后一口气。");
-		BE(1);
 		press();
 		});
-	badEnd[2] = Node("2-破密无门", [&BE]() {
+	badEnd[2] = Node("破密无门", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[2].name);
+		BE(2);
 		print("你皱着眉反复尝试，指尖因焦躁微微颤抖，按钮上的数字冰冷却熟悉。");
 		print("请输入密码：");
 		print("123456");
@@ -916,48 +971,54 @@ void static initBadEnd() {
 		print(color::red + "密码错误！目标已锁定——入侵者");
 		print("");
 		print("一道激光破空而来，你甚至来不及反应，便已倒在血泊之中");
-		BE(2);
 		press();
 		});
-	badEnd[3] = Node("3-神智崩摧", [&BE]() {
+	badEnd[3] = Node("神智崩摧", [&BE]() {
 		press();
-		print("长久的等待与绝望如同潮水，终于漫过了理智的堤坝，你陷入了彻底的癫狂。");
+		TitleGuard BETitle(badEnd[3].name);
 		BE(3);
+		print("长久的等待与绝望如同潮水，终于漫过了理智，你陷入了彻底的癫狂。");
 		press();
 		});
-	badEnd[4] = Node("4-独往基覆", [&BE]() {
+	badEnd[4] = Node("独往基覆", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[4].name);
+		BE(4);
 		print("当你完成任务归来时，眼前的景象令你如坠冰窟——");
 		print("幸存者基地已被丧尸攻破，残垣断壁间，只余丧尸的嘶吼与冰冷的死寂。");
 		print("曾并肩作战的同伴，皆已化作了亡魂，无一人幸免。");
-		BE(4);
 		press();
 		});
-	badEnd[5] = Node("5-基地沦亡", [&BE]() {
+	badEnd[5] = Node("基地沦亡", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[5].name);
+		BE(5);
 		print("丧尸的浪潮如同黑色的洪水，汹涌地冲击着基地的防线。");
 		print("尽管基地的众人皆拼尽全力抵抗，血肉之躯终究难敌滔天尸潮。");
 		print("防线崩裂的刹那，丧尸涌入，你被淹没在狰狞的爪牙之中，最终殒命于此。");
-		BE(5);
 		press();
 		});
-	badEnd[6] = Node("6-变异失智", [&BE]() {
+	badEnd[6] = Node("变异失智", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[6].name);
+		BE(6);
 		print("一股异样的燥热从四肢百骸涌起，你能清晰地感觉到，身体正在被病毒吞噬。");
 		print("意识如同风中残烛，渐渐模糊，腹中升腾起对人肉的疯狂渴望。");
 		print("最终，你眼前一黑，彻底失去了作为人的一切，沦为了行尸走肉。");
-		BE(6);
 		press();
 		});
-	badEnd[7] = Node("7-作者裁决", [&BE]() {
+	badEnd[7] = Node("作者裁决", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[7].name);
+		BE(7);
 		print("冥冥之中，一股不可抗拒的力量降临，你尚未察觉，便已魂归黄泉——");
 		print("你被这世界的缔造者，亲手抹杀。");
-		BE(7);
 		press();
 		});
-	badEnd[8] = Node("8-异女噬身", [&BE]() {
+	badEnd[8] = Node("异女噬身", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[8].name);
+		BE(8);
 		print("椅上坐着的，是个十五岁上下的少年，眉眼间带着与年龄不符的冷漠。");
 		print("你正为这突兀的景象惊愕，少年却缓缓站起，望向你身后的少女。");
 		print("“差不多了吧。”少女的声音响起，带着一丝诡异的笑意。");
@@ -965,35 +1026,39 @@ void static initBadEnd() {
 		print("下一瞬，脖颈处传来刺骨的剧痛，鲜血喷涌而出。");
 		print("你失去意识前的最后一幕，是少女俯身，咬向你脖颈的模样。");
 		if (gameClear)	print("“这不是应该有的结局……”");
-		BE(8);
 		press();
 		});
-	badEnd[9] = Node("9-阅记遭噬", [&BE]() {
+	badEnd[9] = Node("阅记遭噬", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[9].name);
+		BE(9);
 		print("正当你沉浸在笔记的内容中时，脖颈处骤然传来剧痛——被人狠狠咬住。");
 		print("临死前，你隐约听到少年的声音，轻得如同叹息：“再来一次吧。”");
-		BE(9);
 		press();
 		});
-	badEnd[10] = Node("10-麻木度世", [&BE]() {
+	badEnd[10] = Node("麻木度世", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[10].name);
+		BE(10);
 		print("你在荒野中，寻到了另一处幸存者基地，弹尽粮绝的你，选择加入其中。");
 		print("此后的日子，单调得如同复制粘贴：白日外出搜寻物资，夜晚归巢蜷缩度日。");
 		print("“本该是这样的吧？”你时常这样问自己，却只得到满心的空洞。");
 		print("日复一日的孤独，终于磨去了你活下去的所有意义。");
 		print("你选择了结束自己的生命，在末世的寂静中，了却残生。");
-		BE(10);
 		press();
 		});
-	badEnd[11] = Node("11-轻敌丧身", [&BE]() {
+	badEnd[11] = Node("轻敌丧身", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[11].name);
+		BE(11);
 		print("你仓促间朝丧尸扣动扳机，却听见枪膛发出一声空响——子弹尚未上膛。");
 		print("丧尸的利爪转瞬即至，你被一口咬断喉咙，倒在了血泊之中。");
-		BE(11);
 		press();
 		});
-	badEnd[12] = Node("12-称王失意", [&BE]() {
+	badEnd[12] = Node("称王失意", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[12].name);
+		BE(12);
 		print("作为至高无上的王，你看向站在你下面的所有人...");
 		print("歼灭一切有生力量，不留一个人头！");
 		print("你的旨令得到了落实，三日之内，方圆百里内已无一人");
@@ -1001,139 +1066,157 @@ void static initBadEnd() {
 		print("为了食物，大家互相啃咬着、吞食着，应该没有人能躲过这场灾难");
 		print("你不幸在睡梦中，被部下杀死……");
 		print("“果然，最可恨的不是反派，而是生存的本能”");
-		BE(12);
 		press();
 		});
-	badEnd[13] = Node("13-崩解猎援", [&BE]() {
+	badEnd[13] = Node("崩解猎援", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[13].name);
+		BE(13);
 		print("长久的等待与绝望如同潮水，终于漫过了理智的堤坝，你陷入了彻底的癫狂。");
 		if (zombieKing) {
 			print("当政府救援队推开你家的门时，你嘶吼着扑向那抹鲜活的人气。");
 			print("他们试图将你击毙，却被你先发制人，一枪击倒在前。");
 			print("你如同狩猎的凶兽，将救援队逐一屠戮，鲜血染红了原本安宁的居所。");
 			print("当最后一人倒下时，你俯身，开始享用这场血腥的“盛宴”。");
-			BE(13);
 			press();
 			return;
 		}
 		press();
 		});
-	badEnd[14] = Node("14-出界无讯", [&BE]() {
+	badEnd[14] = Node("出界无讯", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[14].name);
+		BE(14);
 		print("一股强烈的撕扯感骤然袭来，仿佛有无形的手，要将你的灵魂从躯体中剥离。");
 		print("这般剧痛，远非血肉之躯所能承受，你在极致的痛苦中，失去了生命。");
-		BE(14);
 		press();
 		});
-	badEnd[15] = Node("15-熟迹反灭", [&BE]() {
+	badEnd[15] = Node("熟迹反灭", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[15].name);
+		BE(15);
 		print("你忽然察觉，笔记上的字迹竟带着几分熟悉，仿佛是刚被人写下不久。");
 		print("正当你凝神思索时，脖颈处骤然传来剧痛——被人狠狠咬住。");
 		print("临死前，你隐约听到少年的声音，轻得如同叹息：“再来一次吧。”");
-		BE(15);
 		press();
 		});
-	badEnd[16] = Node("16-作弊必死", [&BE]() {
+	badEnd[16] = Node("作弊必死", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[16].name);
+		BE(16);
 		print(color::purple + "“翻源代码？太过分了！”");
 		print(color::sky + "===== THE END - CHEATING =====");
-		BE(16);
 		press();
 		FileOperation::saveGame();
 		exit(0);
 		});
-	badEnd[17] = Node("17-杀女被败", [&BE]() {
-		print("你的杀意被她察觉，她先发制人，一颗子弹精准地穿透了你的心脏。");
+	badEnd[17] = Node("杀女被败", [&BE]() {
+		press();
+		TitleGuard BETitle(badEnd[17].name);
 		BE(17);
+		print("你的杀意被她察觉，她先发制人，一颗子弹精准地穿透了你的心脏。");
 		press();
 		});
-	badEnd[18] = Node("18-弹尽群噬", [&BE]() {
+	badEnd[18] = Node("弹尽群噬", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[18].name);
+		BE(18);
 		print("三只丧尸嘶吼着蜂拥而上，你被瞬间扑倒在地，根本来不及挣扎。");
 		print("尖锐的牙齿狠狠刺穿你的喉咙，鲜血如泉涌，意识如潮水般迅速褪去……");
 		if (gameClear) {
 			print("意识消散的最后一刻，你脑海中闪现无数丧尸扑来的画面……");
 			print("“又是这样吗？”");
 		}
-		BE(18);
 		press();
 		});
-	badEnd[19] = Node("19-孤存终亡", [&BE]() {
+	badEnd[19] = Node("孤存终亡", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[19].name);
+		BE(19);
 		print("你携着无尽的食物，独自流浪在末世的荒原之上，却再也未曾遇见任何活物。");
 		print("孤独如同囚笼，禁锢着你的心脏，日复一日，终至窒息。");
 		print("你终于选择了结束自己的生命，在空无一人的世界里，归于沉寂。");
-		BE(19);
 		press();
 		});
-	badEnd[20] = Node("20-精英丧噬", [&BE]() {
+	badEnd[20] = Node("精英丧噬", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[20].name);
+		BE(20);
 		print("精英丧尸的速度远超你的想象，它灵巧地躲过你的子弹，瞬间便扑至你面前。");
 		print("锋利的爪子撕开了你的胸膛，鲜血染红了脚下的土地，你轰然倒地……");
 		if (gameClear) {
 			print("意识消散的最后一刻，你脑海中闪现两只精英丧尸扑来的画面……");
 			print("“又是这样吗？”");
 		}
-		BE(20);
 		press();
 		});
-	badEnd[21] = Node("21-途竭而终", [&BE]() {
+	badEnd[21] = Node("途竭而终", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[21].name);
+		BE(21);
 		print("你与少年结伴，踏上了寻找安全区的路途，然末世的危险，远非你们所能预料。");
 		print("一次搜寻物资时，少年不慎触发丧尸陷阱，你为救他，耗尽了所有子弹。");
 		print("最终，你们被丧尸团团包围，力竭而亡，尸骨湮灭在尸潮之中。");
-		BE(21);
 		press();
 		});
-	badEnd[22] = Node("22-少叛遭祸", [&BE]() {
+	badEnd[22] = Node("少叛遭祸", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[22].name);
+		BE(22);
 		print("深夜露营时，少年趁你熟睡，偷走了所有食物与剩余的子弹，消失在夜色中。");
 		print("你醒来时，已是一无所有，饥饿与绝望将你吞噬，最终倒在荒野之中。");
 		print("丧尸的嘶吼由远及近，成为了你最后的丧钟。");
-		BE(22);
 		press();
 		});
-	badEnd[23] = Node("23-安离反目", [&BE]() {
+	badEnd[23] = Node("安离反目", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[23].name);
+		BE(23);
 		print("你与少年侥幸逃离商场，然后续的旅程中，食物日渐耗尽。");
 		print("为了最后一份食物，你们反目成仇，少年用你赠予的武器，将你击伤在地。");
 		print("你躺在冰冷的地面，看着他拿着食物仓皇逃走，最终被赶来的丧尸吞噬。");
-		BE(23);
 		press();
 		});
-	badEnd[24] = Node("24-成魔叛己", [&BE]() {
+	badEnd[24] = Node("成魔叛己", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[24].name);
+		BE(24);
 		print("你闭上眼睛，狠下心扣动扳机，少年应声倒地，鲜血染红了他的衣衫。");
 		print("杀死同伴的罪恶感如影随形，最终令你精神崩溃，变得嗜血好杀。");
 		print("你成了末世中人人喊打的恶魔，最终被其余幸存者联合围剿，毙于乱枪之下。");
-		BE(24);
 		press();
 		});
-	badEnd[25] = Node("25-携少饥终", [&BE]() {
+	badEnd[25] = Node("携少饥终", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[25].name);
+		BE(25);
 		print("你携着被感染的少年，在末世中艰难前行，然食物很快便消耗殆尽。");
 		print("你们相拥着蜷缩在废弃的车厢里，在饥饿与寒冷中，一同走向了死亡。");
-		BE(25);
 		press();
 		});
-	badEnd[26] = Node("26-异少噬身", [&BE]() {
+	badEnd[26] = Node("异少噬身", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[26].name);
+		BE(26);
 		print("食物耗尽的刹那，少年彻底变异，理智被病毒吞噬，化作了狰狞的丧尸。");
 		print("他扑向你，锋利的牙齿咬断了你的颈动脉，鲜血溅满了他的脸庞。");
 		print("你到死都不敢相信，自己拼尽全力守护的人，最终竟成了终结你的侩子手。");
-		BE(26);
 		press();
 		});
-	badEnd[27] = Node("27-首领灭知", [&BE]() {
+	badEnd[27] = Node("首领灭知", [&BE]() {
+		press();
+		TitleGuard BETitle(badEnd[27].name);
+		BE(27);
 		print("他看向你，目光冷冽，稍加思索后，缓缓开口：");
 		print(color::red + "你知道的太多了，已无法重置，只能被销毁！");
 		print("你的意识最终消散在乱码之中");
-		BE(27);
 		press();
 		});
-	badEnd[28] = Node("28-空城孤王", [&BE]() {
+	badEnd[28] = Node("空城孤王", [&BE]() {
 		press();
-		if (loop >= 2) {
+		TitleGuard BETitle(badEnd[28].name);
+		BE(28);
+		if (loop >= 3) {
 			print("你站在城市顶端，俯瞰着俯首帖耳的尸群，却连一丝胜利的喜悦都无——记忆告诉你，这空城本就是定制的牢笼。");
 			print("这些丧尸是管理员三号的实验造物，这死寂的风鸣，是虚拟场景的背景音，连城市的轮廓，都与上一次分毫不差。");
 			print("“我成了尸王，却仍困在管理员的手心里。”你低声自语，指尖划过冰冷的建筑，怀念起人类的温度、语言的喧嚣。");
@@ -1146,46 +1229,48 @@ void static initBadEnd() {
 		print("");
 		print(color::purple + "你成了空城的唯一王者，知道一切，却无人可统治，无人可倾诉。");
 		print(color::purple + "当最后一丝人类意识消散时，你终于明白 —— 尸王的王座，本就是孤独的坟墓。");
-		BE(28);
 		press();
 		});
-	badEnd[29] = Node("29-循环囚笼", [&BE]() {
+	badEnd[29] = Node("循环囚笼", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[29].name);
 		if (loop >= 3) {
+			BE(29);
 			print("你站在实验室中央，手环上的周目数字跳至“叁”，却发现所有出口都已锁死。");
 			print("总管理员的电子音响起：“三周目触发终极囚笼，实验体3号将永久循环此场景”");
 			print("你尝试了所有方法——破译密码、摧毁控制台、甚至同化丧尸，却始终无法突破这层无形的壁垒。");
 			print("最终，你被困在无尽的周目循环中，成为了实验的“永久样本”。");
 		}
-		BE(29);
 		press();
 		});
-	badEnd[30] = Node("30-数据湮灭", [&BE]() {
+	badEnd[30] = Node("数据湮灭", [&BE]() {
 		press();
+		TitleGuard BETitle(badEnd[30].name);
+		BE(30);
 		print("你试图修改实验核心数据，却触发了管理员的“数据湮灭”协议。");
 		print("眼前的世界开始像素化崩溃——丧尸化作乱码，少年/少女的轮廓逐渐消失，连你自己的躯体也开始透明。");
 		print("“违规修改核心数据，实验体3号数据将被永久清除”");
 		print("你的意识最终消散在乱码之中，连循环的资格都被剥夺。");
-		BE(30);
 		press();
 		});
 }
 void static initHappyEnd() {
 	auto HE = [](int n) {
-		print(color::green + "【终局·幸悦】第" + numChinese(n) + "幕");
-		print(color::green + happyEnd[n].name);
+		print(color::green + "【终局·幸悦】第" + numChinese(n) + "幕 " + happyEnd[n].name);
 		happyEnd[n].unlocked = true;
 		};
-	happyEnd[1] = Node("1-终睹晨曦", [&HE]() {
+	happyEnd[1] = Node("终睹晨曦", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[1].name);
+		HE(1);
 		print("某日清晨，久寂的家门忽闻声响，你携着警惕推门，却见天光破开阴霾——");
 		print("政府军已清除城中丧尸，身着制服的士兵正于街巷间呼唤幸存者，曙光终至。");
 		if (advanced) print("“这是骗局吗？”你心中暗想，怎会如此轻易便重归美好。");
-		HE(1);
 		press();
 		});
-	happyEnd[2] = Node("2-仙侣偕行", [&HE]() {
+	happyEnd[2] = Node("仙侣偕行", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[2].name);
 		print("朝夕相伴的时光里，你与少女渐生情愫，在末世的废墟之上，相爱相依。");
 		print("你们的日子，虽漂泊却也温馨，仿佛末世的黑暗，也因彼此的存在而褪去几分。");
 		print("直到某一日，基地首领的命令，打破了这份平静……");
@@ -1199,6 +1284,7 @@ void static initHappyEnd() {
 			badEnd[trans(BadEndIdx::GirlKilled)].func();
 			return;
 		}
+		HE(2);
 		print("当你与少女完成任务归来时，眼前的景象令你心头一沉——");
 		print("基地已化作一片废墟，昔日的同伴，皆已不在。");
 		print("你与少女别无选择，只能继续在末世中流浪。");
@@ -1214,14 +1300,15 @@ void static initHappyEnd() {
 			print("少女的指尖触上实验控制台，芯片的微光与你拼凑的密码共鸣：“3、2、1，是我们的编号，也是自由的钥匙。”");
 			print("虚拟的末世如潮水退去，实验室的阳光落在你们相握的手上，这一次，你们不再是实验。");
 		}
-		HE(2);
 		press();
 		});
-	happyEnd[3] = Node("3-英名长存", [&HE]() {
+	happyEnd[3] = Node("英名长存", [&HE]() {
 		press();
 		print("你在基地中，过着平静的日子，与同伴一同抵御丧尸，守护着这方小小的安身之所。");
 		print("直到某一日，尸潮汹涌而至，如黑色的洪水，冲击着基地的防线。");
 		if (bullet >= 6) {
+			HE(3);
+			TitleGuard HETitle(happyEnd[3].name);
 			print("基地的每一个人，都拼尽了全力，以血肉之躯，筑起一道坚不可摧的防线。");
 			print("奇迹终至，众人齐心协力，竟真的守住了基地，将尸潮击退。");
 			print("而你，因在守卫战中立下赫赫战功，成为了基地的英雄，受众人敬仰。");
@@ -1231,32 +1318,35 @@ void static initHappyEnd() {
 				print("当你试图提醒他人时，所有人的脸庞，都化作了丧尸的狰狞模样……");
 				print("再次惊醒，你正坐在家中的沙发上，电视里播放着丧尸危机爆发的新闻……");
 			}
-			HE(3);
 			press();
 			return;
 		}
 		else badEnd[trans(BadEndIdx::BaseDestroyed)].func();
 		});
-	happyEnd[4] = Node("4-友谊和光", [&HE]() {
+	happyEnd[4] = Node("友谊和光", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[4].name);
+		HE(4);
 		print("与少年相伴的时光里，你们彼此守护，于末世的黑暗中，成为了对方的光。");
 		print("那些细碎的温暖与感动，终让你点亮了自己的内心。");
 		print("于是，你与少年携手，在这末世之中，活成了彼此的挚友，幸福而安稳。");
-		HE(4);
 		press();
 		});
-	happyEnd[5] = Node("5-心无隔阂", [&HE]() {
+	happyEnd[5] = Node("心无隔阂", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[5].name);
+		HE(5);
 		print("“没关系的，一切都会好起来的。”你轻声安慰，语气温柔。");
 		print("他似是感受到了你的善意，原本紧绷的身躯渐渐放松，一步步向你靠近。");
 		print("你伸出手，伸向他，在他耳边低语：“我会保护好你的，永远。”");
-		HE(5);
 		press();
 		});
-	happyEnd[6] = Node("6-或敌或友", [&HE]() {
+	happyEnd[6] = Node("或敌或友", [&HE]() {
 		print("你点头应允，少女露出笑容：“我先去基地准备，你用尸群守住基地外围！”");
 		girlRelat += 3;
 		press();
+		TitleGuard HETitle(happyEnd[6].name);
+		HE(6);
 		print("你指挥尸群形成一道坚固的防线，将幸存者基地团团围住");
 		print("外部尸潮一次次冲击防线，却都被你的尸群挡在外面");
 		print("基地内，少女的研发顺利进行，成功制出抑制尸化的药剂");
@@ -1264,11 +1354,12 @@ void static initHappyEnd() {
 		print("你立于基地高墙之上，尸群在你身后俯首帖耳，少女在墙内向你挥手。");
 		print("末世之中，你成了最奇特的守护者 —— 一半是尸，一半是人。");
 		print("“我们，是敌人，还是朋友？”");
-		HE(6);
 		press();
 		});
-	happyEnd[7] = Node("7-团结破局", [&HE]() {
+	happyEnd[7] = Node("团结破局", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[7].name);
+		HE(7);
 		print("布满仪器的实验室中，你对着身着白大褂的男子，大声嘶吼，字字泣血：");
 		print("“少年与少女也是鲜活的生命！放他们出去！”");
 		print("男子缓步走向你，语气淡漠：“你会被永远困在循环之中，但可尝试改写他们的命运。”");
@@ -1293,13 +1384,14 @@ void static initHappyEnd() {
 		print("再次醒来，1号与2号已彻底摆脱了管理员的控制，三人并肩而立，一同走出了实验室。");
 		print("你们在末世的废墟之上，建立了真正的幸存者营地。");
 		print("===== THE END - SOLIDARITY =====");
-		HE(6);
 		nextGameLoop();
 		press();
 		});
 
-	happyEnd[8] = Node("8-真假难辨", [&HE]() {
+	happyEnd[8] = Node("真假难辨", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[8].name);
+		HE(8);
 		print("你特意在城市中心建立了一个中立区，接纳所有愿意和平共处的人和丧尸。");
 		print("无论是被人类抛弃的幸存者，还是被尸群驱逐的高阶丧尸，都可以在这里找到容身之所。");
 		print("你制定了严格的规则，禁止任何的杀戮和掠夺。");
@@ -1312,13 +1404,15 @@ void static initHappyEnd() {
 		print("你见过丧尸的凶残，也见过丧尸的温情。");
 		print("你尸王的印记逐渐淡去");
 		print("你只想当一个正常人……");
+		print(color::yellow + "尸王线解除，死亡次数减半");
 		zombieKing = false;
 		death /= 2;
-		HE(8);
 		press();
 		});
-	happyEnd[9] = Node("9-域界平衡", [&HE]() {
+	happyEnd[9] = Node("域界平衡", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[9].name);
+		HE(9);
 		if (loop >= 3) {
 			print("你拒绝了“域管同化”，也没有选择“团结破局”，而是与总管理员达成了“域界平衡”协议。");
 			print("你成为了“平衡者”——既保留人类的情感，又拥有管理员的部分权限，负责维护虚拟末世的“生态平衡”。");
@@ -1329,12 +1423,13 @@ void static initHappyEnd() {
 			print("你与丧尸/人类达成临时停战协议，在末世中建立了短暂的平衡。");
 		}
 		print("===== THE END - BALANCE =====");
-		HE(9);
 		nextGameLoop();
 		press();
 		});
-	happyEnd[10] = Node("10-记忆回响", [&HE]() {
+	happyEnd[10] = Node("记忆回响", [&HE]() {
 		press();
+		TitleGuard HETitle(happyEnd[10].name);
+		HE(10);
 		print("你没有同伴，没有基地，没有解药，也没有力量。");
 		print("你只有一身数不清的伤痕，和几十次死亡刻进骨髓的记忆。");
 		sleep(800);
@@ -1367,19 +1462,19 @@ void static initHappyEnd() {
 		sleep(1500);
 		print("");
 		print(color::bold + "===== THE END - MEMORY ECHO =====");
-		HE(10);
 		nextGameLoop();
 		press();
 		});
 }
 void static initTrueEnd() {
 	auto TE = [](int n) {
-		print(color::yellow + "【终局·真章】第" + numChinese(n) + "幕");
-		print(color::yellow + trueEnd[n].name);
+		print(color::yellow + "【终局·真章】第" + numChinese(n) + "幕 " + trueEnd[n].name);
 		trueEnd[n].unlocked = true;
 		};
-	trueEnd[1] = Node("1-如故如常", [&TE]() {
+	trueEnd[1] = Node("如故如常", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[1].name);
+		TE(1);
 		print("掌心的枪支与怀中的压缩饼干骤然碰撞，迸发出刺眼的金色光晕，包裹了整个世界。");
 		print("光晕交融，丧尸的嘶吼戛然而止，场景在眼前飞速消散。");
 		print("待光芒敛去，天地间已然换了模样——丧尸褪去狰狞，重新化作了血肉之躯的人类。");
@@ -1394,18 +1489,18 @@ void static initTrueEnd() {
 			print("突然，一阵强光闪过，你再次睁眼——");
 			print("你正坐在家中的沙发上，电视里播放着丧尸危机爆发的紧急新闻……");
 		}
-		TE(1);
 		press();
 		});
-	trueEnd[2] = Node("2-守心自持", [&TE]() {
+	trueEnd[2] = Node("守心自持", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[2].name);
+		TE(2);
 		print("病毒终于侵蚀了你的躯体，变异的征兆，开始在你身上显现。");
 		print("你陷入了疯狂的进食状态，直至胃囊被撑破，意识陷入黑暗。");
 		print("再次醒来时，你已化作丧尸，却奇异般地保留了属于人类的意识。");
 		print("你能感受到，自己的力量与速度，皆远胜从前，身躯也不再受疼痛所扰。");
 		print("“或许，化作丧尸，也并非是一件坏事。”你望着自己的利爪，心中如是。");
 		print("或许赢不了世界，但至少，没输给自己。");
-		TE(2);
 		if (advanced) {
 			print("?????????????????????????????");
 			print(color::purple + "“不对！我本是要打败丧尸的，怎会变成如今这般模样？”");
@@ -1418,15 +1513,15 @@ void static initTrueEnd() {
 		if (zombieKing) {
 			print("?????????????????????????????");
 			print(color::purple + "“不对！我本就是丧尸之王，怎会生出这般感慨？”");
-			print("你望向少年，心中波澜翻涌，万千思绪交织。");
-			print("少年缓步走向你，伸出手，与你相握，眼中满是认同。");
 			happyEnd[trans(HappyEndIdx::Soulmates)].func();
 			return;
 		}
 
 		press();
 		});
-	trueEnd[3] = Node("3-实验之相", [&TE]() {
+	trueEnd[3] = Node("实验之相", [&TE]() {
+		press();
+		TitleGuard TETitle(trueEnd[3].name);
 		print("既然你有如此的毅力与实力，我还是告诉你真相吧。——管理员");
 		TE(3);
 		sleep(1000);
@@ -1446,13 +1541,15 @@ void static initTrueEnd() {
 		else press();
 		return;
 		});
-	trueEnd[4] = Node("4-域界皆终", [&TE]() {
+	trueEnd[4] = Node("域界皆终", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[4].name);
+		TE(4);
 		print("丧尸危机骤临之时，你正身处家中");
 		print("这方小小居所，成了乱世中暂安的一隅");
-		press();
-		press();
-		press();
+		buttonHit();
+		buttonHit();
+		buttonHit();
 		// 模拟游戏循环bug
 		for (int i = 1; i <= 1000; i += 100) {
 			print("你的家中尚算安全，你可选择搜寻家中物资，或是前往邻居家一探究竟。");
@@ -1489,7 +1586,6 @@ void static initTrueEnd() {
 		print("你解锁了循环的真相，成功通过人性测试。");
 		print("真相：你是实验体3号，1号（少年）与2号（少女）为辅助测试体。");
 		print("末世是虚拟构建的场景，你的每一次死亡、每一次抉择，皆被实时记录。");
-		TE(4);
 		press();
 		if (loop == 1) {
 			nextGameLoop();
@@ -1522,11 +1618,12 @@ void static initTrueEnd() {
 				trueEnd[trans(TrueEndIdx::Assimilation)].func();
 				return;
 			}
-
 		}
 		});
-	trueEnd[5] = Node("5-迟来之亡", [&TE]() {
+	trueEnd[5] = Node("迟来之亡", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[5].name);
+		TE(5);
 		print("然，世事无常...");
 		print("");
 		print("你猛然惊醒——眼前并非熟悉的家，而是一间布满仪器的实验室。");
@@ -1550,12 +1647,13 @@ void static initTrueEnd() {
 		print("“你这般执着，另有图谋。”");
 		print("男子按下控制台的按钮，一股强烈的电流穿过你的躯体，你瞬间失去了意识……");
 		print("你的记忆，真的是你的记忆吗？");
-		TE(5);
 		death++;
 		press();
 		});
-	trueEnd[6] = Node("6-创世新生", [&TE]() {
+	trueEnd[6] = Node("创世新生", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[6].name);
+		TE(6);
 		print("你回到了家中，打开尘封数年的台式机，风扇发出嗡嗡的声音，屏幕发出蓝色的光");
 		print("你插入拷贝着管理员核心日志的U盘，代码与实验数据在眼前流淌——");
 		print("这从来不是单纯的记录，而是管理员构建世界的底层程序。");
@@ -1573,12 +1671,13 @@ void static initTrueEnd() {
 		print("“你有十点物资，可分配至武器与电力之上……”");
 
 		print("===== THE END - CREATOR =====");
-		TE(6);
 		nextGameLoop();
 		press();
 		});
-	trueEnd[7] = Node("7-域管同化", [&TE]() {
+	trueEnd[7] = Node("域管同化", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[7].name);
+		TE(7);
 		print("你站在基地之中，面对总管理员，心中毫无犹豫，一字一句道：");
 		print("“我愿接受同化，成为新的域管理员。”");
 		sleep(500);
@@ -1601,7 +1700,6 @@ void static initTrueEnd() {
 		print("你坐在管理员的座椅上，望着屏幕中挣扎的新实验体，内心毫无波澜。");
 		print("原来，实验的真正目的，从非测试自由意志，而是筛选合格的控制者。");
 		print("你打破了被控制的循环，却成为了新的控制者，开启了永无止境的测试。");
-		TE(7);
 		sleep(1000);
 		print("===== THE END - ADMIN =====");
 		print("ADMIN-01：实验负责人，追求 “筛选域管理员”；");
@@ -1613,7 +1711,7 @@ void static initTrueEnd() {
 		nextGameLoop();
 		press();
 		});
-	trueEnd[8] = Node("8-或真或假", [&TE]() {
+	trueEnd[8] = Node("或真或假", [&TE]() {
 		press();
 		for (int i = 1; i <= 8; i++)fakeBug(i);
 		print(color::red + color::rev + "周目阈值超限，内存栈溢出崩溃！");
@@ -1695,6 +1793,7 @@ void static initTrueEnd() {
 			}
 			}
 		}
+		TitleGuard TETitle(trueEnd[8].name);
 		TE(8);
 		print("===== THE END - ERROR =====");
 		print("错误阈值超限，内存栈溢出");
@@ -1719,8 +1818,9 @@ void static initTrueEnd() {
 		press();
 		exit(0);
 		});
-	trueEnd[9] = Node("9-时空一瞬", [&TE]() {
+	trueEnd[9] = Node("时空一瞬", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[9].name);
 		TE(9);
 		print(color::yellow + "===== 开发者日志 =====");
 		print("检测到异常行为：有生命正在试图通过“查看帮助”来逃避现实。");
@@ -1781,8 +1881,9 @@ void static initTrueEnd() {
 			exit(0);
 		}
 		});
-	trueEnd[10] = Node("10-群星混沌", [&TE]() {
+	trueEnd[10] = Node("群星混沌", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[10].name);
 		TE(10);
 		print("触发校验中...");
 		print("系统检测到异常数据流...");
@@ -1838,8 +1939,9 @@ void static initTrueEnd() {
 		press();
 		exit(0);
 		});
-	trueEnd[11] = Node("11-管理观局", [&TE]() {
+	trueEnd[11] = Node("管理观局", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[11].name);
 		TE(11);
 		print(color::purple + "【管理员终局 · 观局者】" + color::reset);
 		print("实验室冰冷的观测屏幕铺满整面墙壁，千万条轮回数据流缓缓流淌，少年与少女无数次死亡、重逢、决裂的画面无声滚动。");
@@ -1856,8 +1958,9 @@ void static initTrueEnd() {
 		print("不再是被筛选的实验体，也不是冷漠的世界掌控者，你只是安静旁观世间悲欢、悄悄留存温柔的观局者。循环仍在继续，可绝望不再是唯一的宿命。");
 		press();
 		});
-	trueEnd[12] = Node("12-管理破轨", [&TE]() {
+	trueEnd[12] = Node("管理破轨", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[12].name);
 		TE(12);
 		print(color::yellow + "【管理员终局 · 破轨者】" + color::reset);
 		print("翻阅完ADMIN-04尘封半生的完整实验日志，你终于撕开了所有伪装。");
@@ -1878,8 +1981,9 @@ void static initTrueEnd() {
 		print("轨道被你亲手打破，循环不再是囚禁众生的牢笼，这是你付出自我记忆换来的、真正无束缚的新生。");
 		press();
 		});
-	trueEnd[13] = Node("13-管理同寂", [&TE]() {
+	trueEnd[13] = Node("管理同寂", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[13].name);
 		TE(13);
 		print(color::red + "【管理员终局 · 同寂者】" + color::reset);
 		print("长久浸泡在海量轮回观测数据中，少年少女千百次的痛苦与死亡日复一日冲刷你的精神边界，心底的共情一点点被数据流磨平。");
@@ -1894,8 +1998,9 @@ void static initTrueEnd() {
 		print("你和历代被同化的管理员残魂别无二致，沦为规则的附属品，在永恒寂静的观测牢笼里，独自消磨无尽轮回。");
 		press();
 		});
-	trueEnd[14] = Node("14-管理守序", [&TE]() {
+	trueEnd[14] = Node("管理守序", [&TE]() {
 		press();
+		TitleGuard TETitle(trueEnd[14].name);
 		TE(14);
 		print(color::blue + "【管理员终局 · 守序者】" + color::reset);
 		print("你站在轮回与现实的夹缝中，既没有选择冷眼旁观，也没有冲动打碎系统，更没有沉沦于数据麻木。");
@@ -1914,8 +2019,9 @@ void static initTrueEnd() {
 }
 
 void static initPlot() {
-	plot[1] = Node("1-分配物资", []() {
+	plot[1] = Node("分配物资", []() {
 		clear();
+		TitleGuard PLTitle(plot[1].name);
 		print("丧尸危机骤临之时，你正身处家中");
 		print("窗外的雨混杂着灰烬落下，曾经的都城如今是一座巨大的坟墓");
 		print("而这方小小居所，成了乱世中暂安的一隅");
@@ -1959,7 +2065,8 @@ void static initPlot() {
 		}
 		press();
 		});
-	plot[2] = Node("2-初始探索", []() {
+	plot[2] = Node("初始探索", []() {
+		TitleGuard PLTitle(plot[2].name);
 		showStatus();
 		vector<string> opts = { "留在家中搜索物资", "前往邻居家探索" };
 		int choice = option("首次探索：", opts);
@@ -2046,7 +2153,8 @@ void static initPlot() {
 		}
 		plot[trans(PlotIdx::Girl)].func();
 		});
-	plot[3] = Node("3-初遇少女", []() {
+	plot[3] = Node("初逢少女", []() {
+		TitleGuard PLTitle(plot[3].name);
 		print("回家路上，你遇到一个女幸存者——她手臂渗血，眼神警惕地盯着你");
 		print("她的背包上绣着一个模糊的编号：[T*S**2]");
 		vector<string> opts = { "1. 询问她的伤势", "2. 给她物资", "3. 默默离开" };
@@ -2193,8 +2301,9 @@ void static initPlot() {
 		}
 		plot[trans(PlotIdx::Base)].func();
 		});
-	plot[4] = Node("4-暂入基地", []() {
+	plot[4] = Node("暂留基地", []() {
 		clear();
+		TitleGuard PLTitle(plot[4].name);
 		print("你终于到达幸存者基地");
 		print("坐在椅子上的是一个30岁左右的男性");
 		print("他说，欢迎");
@@ -2210,7 +2319,7 @@ void static initPlot() {
 		if (loop >= 2) opts.push_back("\n4. 调查首领的实验日志");
 
 		choice = option("基地内的行动：", opts);
-		
+
 		if (choice == 1) {
 			print("医疗室里摆满了实验设备，墙上贴着一张病历：");
 			print(color::yellow + "***1号：***知，症**“延**异”，保*****记忆");
@@ -2308,8 +2417,9 @@ void static initPlot() {
 			}
 		}
 		});
-	plot[5] = Node("5-少年同行", []() {
+	plot[5] = Node("少年同行", []() {
 		// 分配武器
+		TitleGuard PLTitle(plot[5].name);
 		vector<string> opts = { "1. 给他枪", "2. 给他水管", "3. 什么都不给" };
 		int choice = option("少年向你要武器", opts);
 		boyWeapon = choice; // 1=枪，2=水管，3=无
@@ -2483,8 +2593,9 @@ void static initPlot() {
 		return;
 		});
 
-	plot[11] = Node("11-总管密令", []() {
+	plot[11] = Node("总管密令", []() {
 		clear();
+		TitleGuard PLTitle(plot[11].name);
 		print("【总管密令】总管理员向你发送专属任务");
 		print("任务目标：收集少年和少女的“意识核心”，换取“域管理员试用权限”");
 		vector<string> opts = { "1. 接受任务，背叛同伴", "2. 拒绝任务，对抗管理员", "3. 拖延任务，观望" };
@@ -2534,8 +2645,9 @@ void static initPlot() {
 			press();
 		}
 		});
-	plot[12] = Node("12-试验密室", []() {
+	plot[12] = Node("试验密室", []() {
 		clear();
+		TitleGuard PLTitle(plot[12].name);
 		print("推开那扇刻着[ADMIN-04]的铅门，冷雾中悬浮着数十个培养舱。");
 		print("舱壁上结着冰霜，里面不是尸体，而是无数连接着光纤的大脑——这是管理员的一个服务器和研究基地。");
 		vector<string> opts = { "1. 强行破门，消耗3枪", "2. 寻找钥匙，消耗2份食物" };
@@ -2623,8 +2735,9 @@ void static initPlot() {
 		}
 		return;
 		});
-	plot[13] = Node("13-尸王谈判", []() {
+	plot[13] = Node("尸王谈判", []() {
 		clear();
+		TitleGuard PLTitle(plot[13].name);
 		print("一位身着白大褂的人突然出现，胸前编号[ADMIN-03]");
 		print("“实验体3号，尸化已成”");
 		vector<string> opts = { "1. 吞噬他获取记忆", "2. 与他谈判获取线索", "3. 无视他继续游荡" };
@@ -2668,8 +2781,9 @@ void static initPlot() {
 		badEnd[trans(BadEndIdx::LoneSurvivor)].func();
 		return;
 		});
-	plot[14] = Node("14-尸王进化", []() {
+	plot[14] = Node("尸王进化", []() {
 		clear();
+		TitleGuard PLTitle(plot[14].name);
 		print(color::purple + "你站在城市最高的写字楼顶端，晚风裹挟着血腥味扑面而来。");
 		print("脚下是俯首帖耳的尸群，它们的意识如同微弱的光点，与你的精神相连。");
 		print("你能清晰地感受到——它们正在进化，从行尸走肉向拥有自我意识的个体转变。");
@@ -2763,7 +2877,8 @@ void static initPlot() {
 			return;
 		}
 		});
-	plot[15] = Node("15-总管抉择", []() {
+	plot[15] = Node("新管抉择", []() {
+		TitleGuard PLTitle(plot[15].name);
 		print("你作为管理员，看到还未完善的存档功能，心中只有等待，");
 		print("【存档完善度 100%】时空锚点锁定，记忆分支已归档，当前权限解锁：【抉择管理】");
 		print("你指尖刚触碰到发光的存档结晶，表层的流光骤然收拢，化作一道淡金色数据流汇入眼前的悬浮面板");
@@ -2812,7 +2927,7 @@ int main() {
 	GetConsoleCursorInfo(hConsole, &cursorInfo);
 	cursorInfo.bVisible = false;
 	SetConsoleCursorInfo(hConsole, &cursorInfo);
-	SetConsoleTitle(TITLE_W);
+	TitleGuard mainTitle = TitleGuard("主界面");
 #endif
 	clear();
 	initBadEnd();
